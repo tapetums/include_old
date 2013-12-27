@@ -42,8 +42,8 @@ thread_local size_t indent = 0;
 class ConsoleHolder
 {
 public:
-    HANDLE evt    = nullptr;
-    HANDLE hout   = nullptr;
+    HANDLE evt  = nullptr;
+    HANDLE hout = nullptr;
 
 public:
     static ConsoleHolder* __stdcall GetInstance()
@@ -115,24 +115,19 @@ static inline void __stdcall get_params(SYSTEMTIME& st, DWORD& thread_id, WORD& 
 
 void __stdcall console_outA(const char* format, ...)
 {
+    // コンソールウィンドウのインスタンスを取得
     auto console = ConsoleHolder::GetInstance();
 
-    SYSTEMTIME st;
-    DWORD      thread_id;
-    WORD       color;
-    get_params(st, thread_id, color);
-
+    DWORD cb_w = 0;
     char spaces[BUFSIZE];
     char buf[BUFSIZE];
 
-    console->EnterSection();
-
-    DWORD cb_w = 0;
+    // インデントを下げる
     if ( strstr(format, " end") )
     {
         if ( indent < 1 )
         {
-            auto buf = "!\n";
+            static const auto buf = "index < 1\n";
             ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
         }
         else
@@ -141,6 +136,7 @@ void __stdcall console_outA(const char* format, ...)
         }
     }
 
+    // インデントを文字列に
     size_t i = 0;
     for ( ; i < indent; ++i )
     {
@@ -149,10 +145,21 @@ void __stdcall console_outA(const char* format, ...)
     }
     spaces[i*2] = '\0';
 
+    // 各種情報を取得
+    SYSTEMTIME st;
+    DWORD      thread_id;
+    WORD       color;
+    get_params(st, thread_id, color);
+
+    // 排他処理を開始
+    console->EnterSection();
+
+    // スレッドごとに色付けする
     ::SetConsoleTextAttribute(console->hout, color);
     ::WriteConsoleA(console->hout, "*", 1, &cb_w, nullptr);
     ::SetConsoleTextAttribute(console->hout, white);
-
+    
+    // 時刻を文字列に
     ::StringCchPrintfA
     (
         buf, BUFSIZE,
@@ -163,6 +170,7 @@ void __stdcall console_outA(const char* format, ...)
     );
     ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
 
+    // 引数を文字列に
     va_list al;
     va_start(al, format);
     {
@@ -170,40 +178,35 @@ void __stdcall console_outA(const char* format, ...)
     }
     va_end(al);
     ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
-
     ::WriteConsoleA(console->hout, "\n", 1, &cb_w, nullptr);
 
+    // 排他処理を終了
+    console->LeaveSection();
 
+    // インデントを上げる
     if ( strstr(format, " begin") )
     {
         ++indent;
     }
-
-    console->LeaveSection();
 }
 
 //---------------------------------------------------------------------------//
 
 void __stdcall console_outW(const wchar_t* format, ...)
 {
+    // コンソールウィンドウのインスタンスを取得
     auto console = ConsoleHolder::GetInstance();
 
-    SYSTEMTIME st;
-    DWORD      thread_id;
-    WORD       color;
-    get_params(st, thread_id, color);
-
+    DWORD cb_w = 0;
     wchar_t spaces[BUFSIZE];
     wchar_t buf[BUFSIZE];
 
-    console->EnterSection();
-
-    DWORD cb_w = 0;
+    // インデントを下げる
     if ( wcsstr(format, L" end") )
     {
         if ( indent < 1 )
         {
-            auto buf = L"!\n";
+            static const auto buf = L"index < 1\n";
             ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
         }
         else
@@ -212,6 +215,7 @@ void __stdcall console_outW(const wchar_t* format, ...)
         }
     }
 
+    // インデントを文字列に
     size_t i = 0;
     for ( ; i < indent; ++i )
     {
@@ -220,10 +224,21 @@ void __stdcall console_outW(const wchar_t* format, ...)
     }
     spaces[i*2] = '\0';
 
+    // 各種情報を取得
+    SYSTEMTIME st;
+    DWORD      thread_id;
+    WORD       color;
+    get_params(st, thread_id, color);
+
+    // 排他処理を開始
+    console->EnterSection();
+
+    // スレッドごとに色付けする
     ::SetConsoleTextAttribute(console->hout, color);
     ::WriteConsoleW(console->hout, L"*", 1, &cb_w, nullptr);
     ::SetConsoleTextAttribute(console->hout, white);
 
+    // 時刻を文字列に
     ::StringCchPrintfW
     (
         buf, BUFSIZE,
@@ -234,6 +249,7 @@ void __stdcall console_outW(const wchar_t* format, ...)
     );
     ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
 
+    // 引数を文字列に
     va_list al;
     va_start(al, format);
     {
@@ -241,15 +257,16 @@ void __stdcall console_outW(const wchar_t* format, ...)
     }
     va_end(al);
     ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
-
     ::WriteConsoleW(console->hout, L"\n", 1, &cb_w, nullptr);
 
+    // 排他処理を終了
+    console->LeaveSection();
+
+    // インデントを上げる
     if ( wcsstr(format, L" begin") )
     {
         ++indent;
     }
-
-    console->LeaveSection();
 }
 
 //---------------------------------------------------------------------------//

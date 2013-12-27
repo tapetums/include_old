@@ -1,6 +1,14 @@
 ﻿// NamedPipe.cpp
 
 //---------------------------------------------------------------------------//
+//
+// 名前付きパイプをカプセル化するクラス
+//   Copyright (C) 2013 tapetums
+//
+// Refered to: EternalWindows
+//   http://eternalwindows.jp/ipc/namedpipe/namedpipe03.html
+//
+//---------------------------------------------------------------------------//
 
 #include <thread>
 
@@ -21,7 +29,7 @@
 
 DWORD __stdcall WaitEvents(HANDLE evt1, HANDLE evt2, DWORD dwMilliseconds)
 {
-    HANDLE evt_array[] = { evt1, evt2, nullptr };
+    const HANDLE evt_array[] = { evt1, evt2, nullptr };
 
     return ::WaitForMultipleObjects(2, evt_array, FALSE, dwMilliseconds);
 }
@@ -248,11 +256,12 @@ HRESULT __stdcall NamedPipe::Open
             while ( true )
             {
                 console_out(TEXT("Waiting for pipe open..."));
-                auto result = ::WaitNamedPipeW(name_pipe_in, 1000);
+                const auto result = ::WaitNamedPipeW(name_pipe_in, 1000);
                 if ( result != 0 )
                 {
-                    ::Sleep(100); // よくわからないけど先方の処理が終わるまでちょっと待つ
-                    auto hr = Connect(&pimpl->data, proceeder, pimpl->name);
+                    // 即座に接続はせず、先方の処理が終わるまでちょっと待つ
+                    ::Sleep(100);
+                    const auto hr = Connect(&pimpl->data, proceeder, pimpl->name);
                     if ( SUCCEEDED(hr) )
                     {
                         break;
@@ -326,7 +335,7 @@ HRESULT __stdcall NamedPipe::Close
 // プログラムの終了を待つ
 DWORD __stdcall NamedPipe::WaitClose()
 {
-    auto result = ::WaitForSingleObject(pimpl->data.evt_close, INFINITE);
+    const auto result = ::WaitForSingleObject(pimpl->data.evt_close, INFINITE);
 
     if ( pimpl->thread_connect.joinable() )
     {
@@ -363,7 +372,7 @@ static HRESULT __stdcall Connect
     console_outW(L"%s", name_out);
 
     // （クライアントから見て）出力パイプに接続
-    auto pipe_write = ::CreateFileW
+    const auto pipe_write = ::CreateFileW
     (
         name_in,
         GENERIC_WRITE, 0, nullptr,
@@ -371,7 +380,7 @@ static HRESULT __stdcall Connect
     );
 
     // （クライアントから見て）入力パイプに接続
-    auto pipe_read = ::CreateFileW
+    const auto pipe_read = ::CreateFileW
     (
         name_out,
         GENERIC_READ,  0, nullptr,
@@ -386,7 +395,7 @@ static HRESULT __stdcall Connect
         return E_FAIL;
     }
 
-    // パイプの情報を取得
+    // パイプのバッファサイズを取得
     DWORD cb_write, cb_read;
     ::GetNamedPipeInfo
     (
@@ -406,13 +415,12 @@ static HRESULT __stdcall Connect
     data->pipe_read  = pipe_read;
 
     // 入出力スレッドを開始
-    auto evt_thread_begin = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    const auto evt_thread_begin = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     auto thread_readwrite = std::thread(ThreadReadWrite, data, proceeder, evt_thread_begin);
     WaitEvents(evt_thread_begin, thread_data->evt_close);
 
     // 後始末
     ::CloseHandle(evt_thread_begin);
-    evt_thread_begin = nullptr;
     thread_readwrite.detach();
 
     console_out(TEXT("Connected"));
@@ -443,13 +451,13 @@ void __stdcall ThreadWaitClient
     const auto evt_disconnect = thread_data->evt_disconnect;
 
     // 接続要求イベントの作成
-    OVERLAPPED ov = { };
     const auto evt_connect = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if ( nullptr == evt_connect )
     {
         console_out(TEXT("Failed to create connection event"));
         return;
     }
+    OVERLAPPED ov = { };
     ov.hEvent = evt_connect;
 
     // 名前付きパイプ名の生成
@@ -460,12 +468,11 @@ void __stdcall ThreadWaitClient
     console_outW(L"%s", name_in);
     console_outW(L"%s", name_out);
 
-    DWORD result;
     while ( true )
     {
         // 名前付きパイプのインスタンスを生成
         console_out(TEXT("Creating named pipes..."));
-        auto pipe_in = ::CreateNamedPipeW
+        const auto pipe_in = ::CreateNamedPipeW
         (
             name_in,
             PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
@@ -473,7 +480,7 @@ void __stdcall ThreadWaitClient
             cb_in, cb_in,
             INFINITE, nullptr
         );
-        auto pipe_out = ::CreateNamedPipeW
+        const auto pipe_out = ::CreateNamedPipeW
         (
             name_out,
             PIPE_ACCESS_OUTBOUND,
@@ -485,7 +492,7 @@ void __stdcall ThreadWaitClient
              pipe_out == INVALID_HANDLE_VALUE )
         {
             console_out(TEXT("Waiting for disconnection..."));
-            result = WaitEvents(evt_disconnect, evt_close);
+            const auto result = WaitEvents(evt_disconnect, evt_close);
             if ( result != WAIT_OBJECT_0 )
             {
                 console_out(TEXT("Closed"));
@@ -502,7 +509,7 @@ void __stdcall ThreadWaitClient
 
         // クライアントからの接続を待つ
         ::ConnectNamedPipe(pipe_in, &ov);
-        result = WaitEvents(evt_connect, evt_close);
+        const auto result = WaitEvents(evt_connect, evt_close);
         if ( result != WAIT_OBJECT_0 )
         {
             ::CloseHandle(pipe_in);
@@ -520,13 +527,12 @@ void __stdcall ThreadWaitClient
         data->pipe_out = pipe_out;
 
         // 入出力スレッドの開始
-        auto evt_thread_begin = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        const auto evt_thread_begin = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
         auto thread_readwrite = std::thread(ThreadReadWrite, data, proceeder, evt_thread_begin);
         WaitEvents(evt_thread_begin, evt_close, 1000);
 
         // 後始末
         ::CloseHandle(evt_thread_begin);
-        evt_thread_begin = nullptr;
         thread_readwrite.detach();
     }
 
@@ -546,6 +552,7 @@ void __stdcall ThreadReadWrite
     HANDLE                 evt_thread_begin
 )
 {
+    // スレッドの開始を通知
     ::SetEvent(evt_thread_begin);
 
     console_out(TEXT("NamedPipe::ThreadReadWrite() begin"));
@@ -568,8 +575,6 @@ void __stdcall ThreadReadWrite
     thread_data = nullptr;
 
     console_out(TEXT("NamedPipe::ThreadReadWrite() end"));
-
-    return;
 }
 
 //---------------------------------------------------------------------------//

@@ -1,6 +1,11 @@
 ﻿// SharedMemory.cpp
 
 //---------------------------------------------------------------------------//
+//
+// 共有メモリをカプセル化するクラス
+//   Copyright (C) 2013 tapetums
+//
+//---------------------------------------------------------------------------//
 
 #include <stdint.h>
 #include <windows.h>
@@ -14,7 +19,7 @@
 
 //---------------------------------------------------------------------------//
 
-static const char riffType_SHDM[4] = { 'S', 'H', 'D', 'M' };
+static const char riffType_SHRD[4] = { 'S', 'H', 'R', 'D' };
 static const char chunkId_sync [4] = { 's', 'y', 'n', 'c' };
 
 //---------------------------------------------------------------------------//
@@ -31,8 +36,9 @@ struct SharedMemory::Impl
     uint8_t* data      = nullptr;
 
     LPMETERED_SECTION msection  = nullptr;
+    HANDLE            evt_block = nullptr;
     HANDLE            evt_read  = nullptr;
-    HANDLE            evt_wrote = nullptr;
+    HANDLE            evt_write = nullptr;
 };
 
 //---------------------------------------------------------------------------//
@@ -175,9 +181,9 @@ HANDLE __stdcall SharedMemory::evt_read() const
 
 //---------------------------------------------------------------------------//
 
-HANDLE __stdcall SharedMemory::evt_wrote() const
+HANDLE __stdcall SharedMemory::evt_write() const
 {
-    return pimpl->evt_wrote;
+    return pimpl->evt_write;
 }
 
 //---------------------------------------------------------------------------//
@@ -186,6 +192,7 @@ HANDLE __stdcall SharedMemory::evt_wrote() const
 //
 //---------------------------------------------------------------------------//
 
+// 新しい共有メモリを作成する
 bool __stdcall SharedMemory::Create
 (
     LPCWSTR  name,
@@ -213,11 +220,22 @@ bool __stdcall SharedMemory::Create
         GenerateUUIDStringW(buf, MAX_PATH);
         ::StringCchCopyW(pimpl->name, MAX_PATH, buf);
     }
-    console_outW(L"NAME: %s", pimpl->name);
+    console_outW(L"name: %s", pimpl->name);
 
     // 作成する共有メモリのサイズを求める
     LARGE_INTEGER size = { };
     size.QuadPart = sizeof(SharedMemory::INFO) + data_size;
+    console_out(TEXT("data_size: %d + %d"), sizeof(SharedMemory::INFO), data_size);
+
+    // 最大同時読み取り数を設定
+    if ( max_reader_count < 1 )
+    {
+        // CPU の 論理コア数と同じに設定する
+        SYSTEM_INFO si = { };
+        ::GetNativeSystemInfo(&si);
+        max_reader_count = si.dwNumberOfProcessors;
+    }
+    console_out(TEXT("max_reader_count: %d"), max_reader_count);
 
     // マッピングオブジェクトを作成
     pimpl->handle = ::CreateFileMappingW
@@ -244,7 +262,7 @@ bool __stdcall SharedMemory::Create
 
     // データ部分の先頭アドレスを取得
     pimpl->data = (uint8_t*)pimpl->info + sizeof(SharedMemory::INFO);
-    console_out(TEXT("sizeof(SharedMemory::INFO): %u"), sizeof(SharedMemory::INFO));
+    //console_out(TEXT("sizeof(SharedMemory::INFO): %u"), sizeof(SharedMemory::INFO));
     //console_out(TEXT("sizeof(RF64Chunk): %u"),          sizeof(RF64Chunk));
     //console_out(TEXT("sizeof(DataSize64Chunk): %u"),    sizeof(DataSize64Chunk));
     //console_out(TEXT("sizeof(SyncObjectChunk): %u"),    sizeof(SharedMemory::INFO::SyncObjectChunk));
@@ -255,7 +273,7 @@ bool __stdcall SharedMemory::Create
         // 'RF64' chunk
         ::memcpy(pimpl->info->chunk_rf64.chunkId,  chunkId_RF64,  4 * sizeof(char));
         pimpl->info->chunk_rf64.chunkSize = UINT32_MAX;
-        ::memcpy(pimpl->info->chunk_rf64.rf64Type, riffType_SHDM, 4 * sizeof(char));
+        ::memcpy(pimpl->info->chunk_rf64.rf64Type, riffType_SHRD, 4 * sizeof(char));
 
         // 'ds64' chunk
         ::memcpy(pimpl->info->chunk_ds64.chunkId,  chunkId_ds64, 4 * sizeof(char));
@@ -270,6 +288,7 @@ bool __stdcall SharedMemory::Create
         ::memcpy(pimpl->info->chunk_sync.chunkId,  chunkId_sync, 4 * sizeof(char));
         pimpl->info->chunk_sync.chunkSize = sizeof(SharedMemory::INFO::SyncObjectChunk);
         GenerateUUIDStringA(pimpl->info->chunk_sync.m_sct_name, SHRD_OBJ_NAME_MAX);
+        GenerateUUIDStringA(pimpl->info->chunk_sync.evt_b_name, SHRD_OBJ_NAME_MAX);
         GenerateUUIDStringA(pimpl->info->chunk_sync.evt_r_name, SHRD_OBJ_NAME_MAX);
         GenerateUUIDStringA(pimpl->info->chunk_sync.evt_w_name, SHRD_OBJ_NAME_MAX);
 
@@ -286,13 +305,14 @@ bool __stdcall SharedMemory::Create
 
     // イベントオブジェクトおよび同期オブジェクトを生成
     pimpl->msection  = ::CreateMeteredSectionA(max_reader_count, max_reader_count, pimpl->info->chunk_sync.m_sct_name);
+    pimpl->evt_block = ::CreateEventA(nullptr, FALSE, TRUE, pimpl->info->chunk_sync.evt_b_name);
     pimpl->evt_read  = ::CreateEventA(nullptr, FALSE, TRUE, pimpl->info->chunk_sync.evt_r_name);
-    pimpl->evt_wrote = ::CreateEventA(nullptr, FALSE, TRUE, pimpl->info->chunk_sync.evt_w_name);
+    pimpl->evt_write = ::CreateEventA(nullptr, FALSE, TRUE, pimpl->info->chunk_sync.evt_w_name);
 
     console_outA("M_SECTION: %s @ %p",  pimpl->info->chunk_sync.m_sct_name, pimpl->msection);
-    console_outA("REQ_EVT:   %s @ %p",  pimpl->info->chunk_sync.evt_r_name, pimpl->evt_read);
-    console_outA("CMP_EVT:   %s @ %p",  pimpl->info->chunk_sync.evt_w_name, pimpl->evt_wrote);
-    console_outA("DATA_SIZE: %u bytes", pimpl->info->chunk_ds64.dataSize);
+    console_outA("EVT_BLOCK: %s @ %p",  pimpl->info->chunk_sync.evt_b_name, pimpl->evt_block);
+    console_outA("EVT_READ:  %s @ %p",  pimpl->info->chunk_sync.evt_r_name, pimpl->evt_read);
+    console_outA("EVT_WRITE: %s @ %p",  pimpl->info->chunk_sync.evt_w_name, pimpl->evt_write);
 
     if ( nullptr == pimpl->msection )
     {
@@ -304,13 +324,13 @@ bool __stdcall SharedMemory::Create
         console_out(TEXT("CreateEventA(evt_read) failed"));
         goto CLOSE;
     }
-    if ( nullptr == pimpl->evt_wrote )
+    if ( nullptr == pimpl->evt_write )
     {
-        console_out(TEXT("CreateEventA(evt_wrote) failed"));
+        console_out(TEXT("CreateEventA(evt_write) failed"));
         goto CLOSE;
     }
 
-    // 完成
+    // 完了
     console_out(TEXT("SharedMemory::Create() end"));
 
     return true;
@@ -325,6 +345,7 @@ CLOSE: this->Close();
 
 //---------------------------------------------------------------------------//
 
+// 既存の共有メモリを開く
 bool __stdcall SharedMemory::Open
 (
     LPCWSTR name
@@ -339,7 +360,7 @@ bool __stdcall SharedMemory::Open
 
     // 名前をメンバ変数にコピー
     ::StringCchCopyW(pimpl->name, MAX_PATH, name);
-    console_outW(L"NAME: %s", pimpl->name);
+    console_outW(L"name: %s", pimpl->name);
 
     // マッピングオブジェクトを開く
     pimpl->handle = ::OpenFileMappingW
@@ -362,19 +383,26 @@ bool __stdcall SharedMemory::Open
         console_out(TEXT("MapViewOfFile() failed"));
         goto CLOSE;
     }
+    console_out(TEXT("RF64 chunk size: %d"), pimpl->info->chunk_rf64.chunkSize);
+    console_out(TEXT("ds64 chunk size: %u"), pimpl->info->chunk_ds64.chunkSize);
+    console_out(TEXT("riff size:       %u"), pimpl->info->chunk_ds64.riffSize);
+    console_out(TEXT("data size:       %u"), pimpl->info->chunk_ds64.dataSize);
+    console_out(TEXT("sync chunk size: %d"), pimpl->info->chunk_sync.chunkSize);
+    console_out(TEXT("data chunk size: %d"), pimpl->info->chunk_data.chunkSize);
 
     // データ部分の先頭アドレスを取得
     pimpl->data = (uint8_t*)pimpl->info + sizeof(SharedMemory::INFO);
 
     // イベントオブジェクトおよび同期オブジェクトを取得
     pimpl->msection  = ::OpenMeteredSectionA(pimpl->info->chunk_sync.m_sct_name);
+    pimpl->evt_block = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_w_name);
     pimpl->evt_read  = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_r_name);
-    pimpl->evt_wrote = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_w_name);
+    pimpl->evt_write = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_w_name);
 
     console_outA("M_SECTION: %s @ %p",  pimpl->info->chunk_sync.m_sct_name, pimpl->msection);
-    console_outA("REQ_EVT:   %s @ %p",  pimpl->info->chunk_sync.evt_r_name, pimpl->evt_read);
-    console_outA("CMP_EVT:   %s @ %p",  pimpl->info->chunk_sync.evt_w_name, pimpl->evt_wrote);
-    console_outA("DATA_SIZE: %u bytes", pimpl->info->chunk_ds64.dataSize);
+    console_outA("EVT_BLOCK  %s @ %p",  pimpl->info->chunk_sync.evt_b_name, pimpl->evt_block);
+    console_outA("EVT_READ:  %s @ %p",  pimpl->info->chunk_sync.evt_r_name, pimpl->evt_read);
+    console_outA("EVT_WRITE  %s @ %p",  pimpl->info->chunk_sync.evt_w_name, pimpl->evt_write);
 
     if ( nullptr == pimpl->msection )
     {
@@ -386,13 +414,13 @@ bool __stdcall SharedMemory::Open
         console_out(TEXT("OpenEventA(evt_read) failed"));
         goto CLOSE;
     }
-    if ( nullptr == pimpl->evt_wrote )
+    if ( nullptr == pimpl->evt_write )
     {
-        console_out(TEXT("OpenEventA(evt_wrote) failed"));
+        console_out(TEXT("OpenEventA(evt_write) failed"));
         goto CLOSE;
     }
 
-    // 完成
+    // 完了
     console_out(TEXT("SharedMemory::Open() end"));
 
     return true;
@@ -407,6 +435,7 @@ CLOSE: this->Close();
 
 //---------------------------------------------------------------------------//
 
+// 共有メモリを閉じる
 bool __stdcall SharedMemory::Close()
 {
     console_out(TEXT("SharedMemory::Close() begin"));
@@ -419,15 +448,20 @@ bool __stdcall SharedMemory::Close()
     }
 
     // 所有オブジェクトの解放
-    if ( pimpl->evt_wrote )
+    if ( pimpl->evt_write )
     {
-        ::CloseHandle(pimpl->evt_wrote);
-        pimpl->evt_wrote = nullptr;
+        ::CloseHandle(pimpl->evt_write);
+        pimpl->evt_write = nullptr;
     }
     if ( pimpl->evt_read )
     {
         ::CloseHandle(pimpl->evt_read);
         pimpl->evt_read = nullptr;
+    }
+    if ( pimpl->evt_block )
+    {
+        ::CloseHandle(pimpl->evt_block);
+        pimpl->evt_block = nullptr;
     }
     if ( pimpl->msection )
     {
@@ -455,6 +489,7 @@ bool __stdcall SharedMemory::Close()
 
 //---------------------------------------------------------------------------//
 
+// 共有メモリのデータを読み込む
 size_t __stdcall SharedMemory::Read
 (
     void*  buffer,
@@ -480,7 +515,7 @@ size_t __stdcall SharedMemory::Read
     }
 
     size_t cb_read;
-    #if defined(_WIN64) || defined (WIN64)
+    #if defined(_WIN64) || defined(WIN64)
         cb_read = min(size, pimpl->info->chunk_ds64.dataSize - offset);
     #else
         uint64_t size64 = min(size, pimpl->info->chunk_ds64.dataSize - offset);
@@ -495,8 +530,9 @@ size_t __stdcall SharedMemory::Read
 
     DWORD ret;
 
+    // 読み込み開始処理
     console_out(TEXT("Waiting for finish writing..."));
-    ret = ::WaitForSingleObject(pimpl->evt_wrote, dwMilliseconds);
+    ret = ::WaitForSingleObject(pimpl->evt_block, dwMilliseconds);
     if ( ret == WAIT_TIMEOUT )
     {
         console_out(TEXT("WaitObject: WAIT_TIMEOUT"));
@@ -506,6 +542,7 @@ size_t __stdcall SharedMemory::Read
 
 /// ここから読み込み開始 & 書き込み開始処理はブロックされる
 
+    // 読み込み処理
     ret = ::EnterMeteredSection(pimpl->msection, dwMilliseconds);
     if ( ret == WAIT_TIMEOUT )
     {
@@ -519,16 +556,15 @@ size_t __stdcall SharedMemory::Read
 
 /// ここから書き込み処理はブロックされる
 
-    ::SetEvent(pimpl->evt_wrote);
+    ::SetEvent(pimpl->evt_block);
 
 /// ここまで読み込み開始 & 書き込み開始処理はブロックされる
 
+    // 未読み込み状態にする
     ::ResetEvent(pimpl->evt_read);
 
     ::memcpy(buffer, pimpl->data + offset, cb_read);
     console_out(TEXT("Read %u bytes"), cb_read);
-
-    ::SetEvent(pimpl->evt_read);
 
     ::LeaveMeteredSection(pimpl->msection, 1, nullptr);
     console_out(TEXT("Finish reading ... lAvailableCount: %d"), pimpl->msection->lpSharedInfo->lAvailableCount);
@@ -536,6 +572,9 @@ size_t __stdcall SharedMemory::Read
 /// ここまで書き込み処理はブロックされる
 
 /// 資源が枯渇していた場合、ここまで読み込み処理はブロックされる
+    
+    // 読み込み完了を通知
+    this->NotifyRead();
 
     console_out(TEXT("SharedMemory::Read() end"));
 
@@ -544,6 +583,7 @@ size_t __stdcall SharedMemory::Read
 
 //---------------------------------------------------------------------------//
 
+// 共有メモリにデータを書き込む
 size_t __stdcall SharedMemory::Write
 (
     void*  buffer,
@@ -569,7 +609,7 @@ size_t __stdcall SharedMemory::Write
     }
 
     size_t cb_written;
-    #if defined(_WIN64) || defined (WIN64)
+    #if defined(_WIN64) || defined(WIN64)
         cb_written = min(size, pimpl->info->chunk_ds64.dataSize - offset);
     #else
         uint64_t size64 = min(size, pimpl->info->chunk_ds64.dataSize - offset);
@@ -584,8 +624,9 @@ size_t __stdcall SharedMemory::Write
 
     DWORD ret;
 
+    // 書き込み開始処理
     console_out(TEXT("Waiting for another thread to finish writing..."));
-    ret = ::WaitForSingleObject(pimpl->evt_wrote, dwMilliseconds);
+    ret = ::WaitForSingleObject(pimpl->evt_block, dwMilliseconds);
     if ( ret == WAIT_TIMEOUT )
     {
         console_out(TEXT("WaitObject: WAIT_TIMEOUT"));
@@ -621,12 +662,14 @@ size_t __stdcall SharedMemory::Write
 
 /// ここから読み込み処理はブロックされる
 
+    // 未書き込み状態にする
+    ::ResetEvent(pimpl->evt_write);
+
     ::memcpy(pimpl->data + offset, buffer, cb_written);
     console_out(TEXT("Wrote %u bytes"), cb_written);
 
-    ::ResetEvent(pimpl->evt_read); // 未読み込み状態にする
-
-    ::SetEvent(pimpl->evt_wrote);
+    // 未読み込み状態にする
+    ::ResetEvent(pimpl->evt_read);
 
 /// ここまで読み込み処理はブロックされる
 
@@ -637,11 +680,48 @@ size_t __stdcall SharedMemory::Write
     ::LeaveMeteredSection(pimpl->msection, max_reader_count, nullptr);
     console_out(TEXT("Finish writing ... lAvailableCount: %d"), pimpl->msection->lpSharedInfo->lAvailableCount);
 
+    ::SetEvent(pimpl->evt_block);
+
 /// ここまで読み込み開始処理はブロックされる
+    
+    // 書き込み完了を通知
+    this->NotifyWrite();
 
     console_out(TEXT("SharedMemory::Write() end"));
 
     return cb_written;
+}
+
+//---------------------------------------------------------------------------//
+
+// 読み込み完了を通知する
+void __stdcall SharedMemory::NotifyRead()
+{
+    ::SetEvent(pimpl->evt_read);
+}
+
+//---------------------------------------------------------------------------//
+
+// 書き込み完了を通知する
+void __stdcall SharedMemory::NotifyWrite()
+{
+    ::SetEvent(pimpl->evt_write);
+}
+
+//---------------------------------------------------------------------------//
+
+// 読み込み完了を待つ
+DWORD __stdcall SharedMemory::WaitRead(DWORD dwMilliseconds)
+{
+    return ::WaitForSingleObject(pimpl->evt_read, dwMilliseconds);
+}
+
+//---------------------------------------------------------------------------//
+
+// 書き込み完了を待つ
+DWORD __stdcall SharedMemory::WaitWrite(DWORD dwMilliseconds)
+{
+    return ::WaitForSingleObject(pimpl->evt_write, dwMilliseconds);
 }
 
 //---------------------------------------------------------------------------//
