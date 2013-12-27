@@ -1,0 +1,18 @@
+﻿EXPORTS
+	GetPluginInfo
+	IsSupported
+	GetPictureInfo
+	GetPicture
+	GetPreview
+	GetArchiveInfo
+	GetFileInfo
+	GetFile
+	GetPluginInfoW
+	IsSupportedW
+	GetPictureInfoW
+	GetPictureW
+	GetPreviewW
+	GetArchiveInfoW
+	GetFileInfoW
+	GetFileW
+	ConfigurationDlg
