@@ -10,10 +10,11 @@
 //---------------------------------------------------------------------------//
 
 #include <stdint.h>
-
-typedef unsigned char char8_t;
+#include <windows.h>
 
 //---------------------------------------------------------------------------//
+
+typedef unsigned char char8_t;
 
 #define U8STR  char8_t*
 #define U8CSTR const char8_t*
@@ -39,7 +40,7 @@ static const IID IID_ICommandArray =
 static const IID IID_ICompAdapter =
 { 0x6036103d, 0xe3bd, 0x46ba, { 0xb9, 0xa8, 0x3f, 0xfd, 0xfd, 0x68, 0xd7, 0x23 } };
 
-static const IID IID_ICompManager =
+static const IID IID_ICompCollection =
 { 0x45e0aaf1, 0x3e4e, 0x4e6e, { 0x92, 0x5b, 0x92, 0x9e, 0xc1, 0xa5, 0x63, 0xf7 } };
 
 static const IID IID_IComponent =
@@ -80,7 +81,7 @@ interface ICommand;
 interface ICommandArray;
 
 interface ICompAdapter;
-interface ICompManager;
+interface ICompCollection;
 
 interface IComponent;
 interface IComponentHost;
@@ -133,13 +134,13 @@ static const HRESULT E_BUSY     = 0x8FFFFFFF;
 // コンポーネントの種類
 enum class COMPTYPE : uint32_t
 {
-    UNKNOWN  = (uint32_t)-1, // 不明なタイプ
-    BASIC   = 0,             // 基本コンポーネント
-    HOST    = 1,             // コンポーネントホスト
-    UI      = 1 << 1,        // UI コンポーネント
-    COMMAND = 1 << 2,        // コマンドコンポーネント
-    READER  = 1 << 3,        // 入力コンポーネント
-    WRITER  = 1 << 4,        // 出力コンポーネント
+    UNKNOWN  = UINT32_MAX, // 不明なタイプ
+    BASIC   = 0,           // 基本コンポーネント
+    HOST    = 1,           // コンポーネントホスト
+    UI      = 1 << 1,      // UI コンポーネント
+    COMMAND = 1 << 2,      // コマンドコンポーネント
+    READER  = 1 << 3,      // 入力コンポーネント
+    WRITER  = 1 << 4,      // 出力コンポーネント
 };
 
 //---------------------------------------------------------------------------//
@@ -147,53 +148,53 @@ enum class COMPTYPE : uint32_t
 // コンポーネントの状態
 enum class STATE : uint32_t
 {
-    UNKNOWN  = (uint32_t)-1, // 未初期化
-    IDLE     = 0,            // 停止中
-    ACTIVE   = 1,            // 実行中
-    OPEN     = 1 << 1,       // 所有オブジェクトは開かれている
-    STARTING = 1 << 2,       // 開始処理中
-    STOPPING = 1 << 3,       // 終了処理中
-    CLOSING  = 1 << 4,       // 所有オブジェクトを閉じようとしている
-    OPENING  = 1 << 5,       // 所有オブジェクトを開こうとしている
-    SEEKING  = 1 << 6,       // 所有オブジェクトを走査中
-    READING  = 1 << 7,       // 所有オブジェクトからデータを読込中
-    WRITING  = 1 << 8,       // 所有オブジェクトにデータを書込中
+    UNKNOWN  = UINT32_MAX, // 未初期化
+    IDLE     = 0,          // 停止中
+    ACTIVE   = 1,          // 実行中
+    OPEN     = 1 << 1,     // 所有オブジェクトは開かれている
+    STARTING = 1 << 2,     // 開始処理中
+    STOPPING = 1 << 3,     // 終了処理中
+    CLOSING  = 1 << 4,     // 所有オブジェクトを閉じようとしている
+    OPENING  = 1 << 5,     // 所有オブジェクトを開こうとしている
+    SEEKING  = 1 << 6,     // 所有オブジェクトを走査中
+    READING  = 1 << 7,     // 所有オブジェクトからデータを読込中
+    WRITING  = 1 << 8,     // 所有オブジェクトにデータを書込中
 };
 
 // 暗黙の変換がなされないので以下の演算子オーバーロードが必要
-inline STATE operator & (const STATE& lhs, const STATE& rhs)
+inline STATE __stdcall operator &(const STATE& lhs, const STATE& rhs)
 {
     return (STATE)((uint32_t)lhs & (uint32_t)rhs);
 }
-inline STATE operator | (const STATE& lhs, const STATE& rhs)
+inline STATE __stdcall operator |(const STATE& lhs, const STATE& rhs)
 {
     return (STATE)((uint32_t)lhs | (uint32_t)rhs);
 }
-inline STATE operator ^ (const STATE& lhs, const STATE& rhs)
+inline STATE __stdcall operator ^(const STATE& lhs, const STATE& rhs)
 {
     return (STATE)((uint32_t)lhs ^ (uint32_t)rhs);
 }
-inline STATE operator ~ (const STATE& lhs)
+inline STATE __stdcall operator ~(const STATE& lhs)
 {
     return (STATE)(~(uint32_t)lhs);
 }
-inline STATE& operator &= (STATE& lhs, const STATE& rhs)
+inline STATE& __stdcall operator &=(STATE& lhs, const STATE& rhs)
 {
     lhs = lhs & rhs; return lhs;
 }
-inline STATE& operator |= (STATE& lhs, const STATE& rhs)
+inline STATE& __stdcall operator |=(STATE& lhs, const STATE& rhs)
 {
     lhs = lhs | rhs; return lhs;
 }
-inline STATE& operator ^= (STATE& lhs, const STATE& rhs)
+inline STATE& __stdcall operator ^=(STATE& lhs, const STATE& rhs)
 {
     lhs = lhs ^ rhs; return lhs;
 }
-inline bool operator == (const STATE& lhs, const STATE& rhs)
+inline bool __stdcall operator ==(const STATE& lhs, const STATE& rhs)
 {
     return ((uint32_t)lhs == (uint32_t)rhs);
 }
-inline bool operator != (const STATE& lhs, const STATE& rhs)
+inline bool __stdcall operator !=(const STATE& lhs, const STATE& rhs)
 {
     return ((uint32_t)lhs != (uint32_t)rhs);
 }
@@ -255,7 +256,7 @@ interface ICompAdapter : public IUnknown
     virtual REFCLSID    __stdcall clsid()       const = 0;
     virtual U8CSTR      __stdcall copyright()   const = 0;
     virtual U8CSTR      __stdcall description() const = 0;
-    virtual U8CSTR      __stdcall filepath()    const = 0;
+    virtual U8CSTR      __stdcall path()        const = 0;
     virtual size_t      __stdcall index()       const = 0;
     virtual IDataArray* __stdcall property()    const = 0;
     virtual U8CSTR      __stdcall name()        const = 0;
@@ -270,16 +271,18 @@ interface ICompAdapter : public IUnknown
 
 //---------------------------------------------------------------------------//
 
-// コンポーネント管理オブジェクトのインターフェイス
-interface ICompManager : public IUnknown
-{
-    virtual size_t        __stdcall comp_count()            const = 0;
-    virtual ICompAdapter* __stdcall component(size_t index) const = 0;
-    virtual U8CSTR        __stdcall dirpath()               const = 0;
+typedef bool (__stdcall* CollectIf)(const ICompAdapter* adapter);
 
-    virtual ICompAdapter* __stdcall Find(REFCLSID rclsid) = 0;
-    virtual HRESULT       __stdcall LoadAll(U8CSTR dir_path) = 0;
-    virtual HRESULT       __stdcall FreeAll() = 0;
+// コンポーネント管理オブジェクトのインターフェイス
+interface ICompCollection : public IUnknown
+{
+    virtual size_t        __stdcall size()           const = 0;
+    virtual ICompAdapter* __stdcall at(size_t index) const = 0;
+
+    virtual HRESULT          __stdcall Append(U8CSTR path) = 0;
+    virtual HRESULT          __stdcall Remove(U8CSTR path) = 0;
+    virtual ICompCollection* __stdcall Collect(const CollectIf comparison) = 0;
+    virtual ICompAdapter*    __stdcall Find(REFCLSID rclsid) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -287,12 +290,12 @@ interface ICompManager : public IUnknown
 // コンポーネントの基本インターフェイス
 interface IComponent : public IUnknown
 {
-    virtual REFCLSID      __stdcall clsid()    const = 0;
-    virtual ICompManager* __stdcall manager()  const = 0;
-    virtual U8CSTR        __stdcall name()     const = 0;
-    virtual IComponent*   __stdcall owner()    const = 0;
-    virtual IDataArray*   __stdcall property() const = 0;
-    virtual STATE         __stdcall status()   const = 0;
+    virtual REFCLSID         __stdcall clsid()      const = 0;
+    virtual ICompCollection* __stdcall collection() const = 0;
+    virtual U8CSTR           __stdcall name()       const = 0;
+    virtual IComponent*      __stdcall owner()      const = 0;
+    virtual IDataArray*      __stdcall property()   const = 0;
+    virtual STATE            __stdcall status()     const = 0;
 
     virtual HRESULT __stdcall AttachMessage(U8CSTR msg, IComponent* listener) = 0;
     virtual HRESULT __stdcall DetachMessage(U8CSTR msg, IComponent* listener) = 0;

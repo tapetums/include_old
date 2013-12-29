@@ -83,7 +83,7 @@ struct NamedPipe::DATA
 // パイプデータを読み書きする関数オブジェクトのインターフェイス
 interface NamedPipe::IReadWrite
 {
-    virtual ~IReadWrite() { }
+    virtual ~IReadWrite() = default;
     virtual void __stdcall ReadWrite(const NamedPipe::DATA& data) = 0;
 };
 

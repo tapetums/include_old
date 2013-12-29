@@ -12,6 +12,10 @@
 #include "UWnd.hpp"
 
 //---------------------------------------------------------------------------//
+//
+// Utility Function
+//
+//---------------------------------------------------------------------------//
 
 static void __stdcall ShowLastError(LPCTSTR mbx_title)
 {
@@ -33,98 +37,160 @@ static void __stdcall ShowLastError(LPCTSTR mbx_title)
 }
 
 //---------------------------------------------------------------------------//
+//
+// Ctor / Dtor
+//
+//---------------------------------------------------------------------------//
 
-UWnd::UWnd()
+UWnd::UWnd(LPCTSTR lpszClassName)
 {
-    console_out(TEXT("UWnd::ctor begin"));
+    console_out(TEXT("UWnd::ctor() begin"));
 
-    m_className = TEXT("UWnd");
-    UWnd::Register(m_className);
+    m_classname = lpszClassName;
 
-    console_out(TEXT("UWnd::ctor end"));
+    this->Register();
+
+    console_out(TEXT("UWnd::ctor() end"));
 }
 
 //---------------------------------------------------------------------------//
 
 UWnd::~UWnd()
 {
-    console_out(TEXT("UWnd::dtor begin"));
+    console_out(TEXT("UWnd::dtor() begin"));
+
+    if ( nullptr == m_hwnd )
+    {
+        console_out(TEXT("Already moved"));
+        console_out(TEXT("UWnd::dtor() end"));
+        return;
+    }
 
     this->Destroy();
 
-    console_out(TEXT("UWnd::dtor end"));
+    console_out(TEXT("UWnd::dtor() end"));
 }
 
 //---------------------------------------------------------------------------//
 
-INT32 __stdcall UWnd::X() const
+UWnd::UWnd(UWnd&& rhs)
+{
+    console_out(TEXT("UWnd::ctor(move) begin"));
+
+    m_x             = rhs.m_x;
+    m_y             = rhs.m_y;
+    m_w             = rhs.m_w;
+    m_h             = rhs.m_h;
+    m_hwnd          = rhs.m_hwnd;
+    m_classname     = rhs.m_classname;
+    m_is_fullscreen = rhs.m_is_fullscreen;
+    m_win_rect      = rhs.m_win_rect;
+
+    rhs.m_hwnd = nullptr;
+
+    console_out(TEXT("UWnd::ctor(move) end"));
+}
+
+//---------------------------------------------------------------------------//
+
+UWnd& UWnd::operator =(UWnd&& rhs)
+{
+    console_out(TEXT("UWnd::operator =(move) begin"));
+
+    m_x             = rhs.m_x;
+    m_y             = rhs.m_y;
+    m_w             = rhs.m_w;
+    m_h             = rhs.m_h;
+    m_hwnd          = rhs.m_hwnd;
+    m_classname     = rhs.m_classname;
+    m_is_fullscreen = rhs.m_is_fullscreen;
+    m_win_rect      = rhs.m_win_rect;
+
+    rhs.m_hwnd = nullptr;
+
+    console_out(TEXT("UWnd::operator =(move) end"));
+
+    return *this;
+}
+
+//---------------------------------------------------------------------------//
+//
+// Properties
+//
+//---------------------------------------------------------------------------//
+
+INT32 __stdcall UWnd::x() const
 {
     return m_x;
 }
 
 //---------------------------------------------------------------------------//
 
-INT32 __stdcall UWnd::Y() const
+INT32 __stdcall UWnd::y() const
 {
     return m_y;
 }
 
 //---------------------------------------------------------------------------//
 
-INT32 __stdcall UWnd::Width() const
+INT32 __stdcall UWnd::width() const
 {
     return m_w;
 }
 
 //---------------------------------------------------------------------------//
 
-INT32 __stdcall UWnd::Height() const
+INT32 __stdcall UWnd::height() const
 {
     return m_h;
 }
 
 //---------------------------------------------------------------------------//
 
-DWORD __stdcall UWnd::Style() const
+DWORD __stdcall UWnd::style() const
 {
     return (DWORD)::GetWindowLongPtr(m_hwnd, GWL_STYLE);
 }
 
 //---------------------------------------------------------------------------//
 
-DWORD __stdcall UWnd::StyleEx() const
+DWORD __stdcall UWnd::styleEx() const
 {
     return (DWORD)::GetWindowLongPtr(m_hwnd, GWL_EXSTYLE);
 }
 
 //---------------------------------------------------------------------------//
 
-HWND __stdcall UWnd::Handle() const
+HWND __stdcall UWnd::handle() const
 {
     return m_hwnd;
 }
 
 //---------------------------------------------------------------------------//
 
-HWND __stdcall UWnd::Parent() const
+HWND __stdcall UWnd::parent() const
 {
     return (HWND)::GetWindowLongPtr(m_hwnd, GWLP_HWNDPARENT);
 }
 
 //---------------------------------------------------------------------------//
 
-LPCTSTR __stdcall UWnd::ClassName() const
+LPCTSTR __stdcall UWnd::classname() const
 {
-    return m_className;
+    return m_classname;
 }
 
 //---------------------------------------------------------------------------//
 
-bool __stdcall UWnd::IsFullScreen() const
+bool __stdcall UWnd::is_fullscreen() const
 {
-    return m_fullscreen;
+    return m_is_fullscreen;
 }
 
+//---------------------------------------------------------------------------//
+//
+// Methids
+//
 //---------------------------------------------------------------------------//
 
 HRESULT __stdcall UWnd::Create
@@ -136,13 +202,13 @@ HRESULT __stdcall UWnd::Create
     HMENU   hMenu
 )
 {
-    console_out(TEXT("UWnd::Create( %s ) begin"), lpWindowName);
+    console_out(TEXT("UWnd::Create(%s) begin"), m_classname);
 
     // 二重生成防止!
     if ( m_hwnd )
     {
         console_out(TEXT("Already created"));
-        console_out(TEXT("UWnd::Create(%s) end"), lpWindowName);
+        console_out(TEXT("UWnd::Create(%s) end"), m_classname);
         return S_FALSE;
     }
 
@@ -152,23 +218,23 @@ HRESULT __stdcall UWnd::Create
     // ウィンドウを生成 … UWnd::StaticWndProc() 内で m_hwnd を格納している
     ::CreateWindowEx
     (
-        styleEx, m_className, lpWindowName, style,
+        styleEx, m_classname, lpWindowName, style,
         m_x, m_y, m_w, m_h,
         hwndParent, hMenu, ::GetModuleHandle(nullptr), (LPVOID)this
     );
     if ( nullptr == m_hwnd )
     {
         // エラーメッセージの表示
-        ShowLastError(m_className);
-        console_out(TEXT("UWnd::Create(%s) end"), lpWindowName);
-        return E_FAIL;
+        ShowLastError(m_classname);
+    }
+    else
+    {
+        ::UpdateWindow(m_hwnd);
     }
 
-    ::UpdateWindow(m_hwnd);
+    console_out(TEXT("UWnd::Create(%s) end"), m_classname);
 
-    console_out(TEXT("UWnd::Create(%s) end"), lpWindowName);
-
-    return S_OK;
+    return m_hwnd ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
@@ -197,7 +263,7 @@ HRESULT __stdcall UWnd::Destroy()
 
 HRESULT __stdcall UWnd::Close()
 {
-    auto ret = ::SendMessage(m_hwnd, WM_CLOSE, 0, 0);
+    const auto ret = ::SendMessage(m_hwnd, WM_CLOSE, 0, 0);
 
     return (ret == 0) ? S_OK : E_FAIL;
 }
@@ -208,46 +274,46 @@ HRESULT __stdcall UWnd::Bounds(INT32 x, INT32 y, INT32 w, INT32 h)
 {
     this->AdjustRect(w, h);
 
-    auto ret = ::SetWindowPos
+    const auto ret = ::SetWindowPos
     (
         m_hwnd, nullptr,
         x, y, w, h,
         SWP_NOZORDER | SWP_FRAMECHANGED
     );
 
-    return (ret == TRUE) ? S_OK : E_FAIL;
+    return ret ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
 
 HRESULT __stdcall UWnd::Hide()
 {
-    auto ret = ::ShowWindowAsync(m_hwnd, SW_HIDE);
+    const auto ret = ::ShowWindowAsync(m_hwnd, SW_HIDE);
 
-    return (ret == TRUE) ? S_OK : E_FAIL;
+    return ret ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
 
 HRESULT __stdcall UWnd::Move(INT32 x, INT32 y)
 {
-    auto ret = ::SetWindowPos
+    const auto ret = ::SetWindowPos
     (
         m_hwnd, nullptr,
         x, y, 0, 0,
         SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED
     );
 
-    return (ret == TRUE) ? S_OK : E_FAIL;
+    return ret ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
 
 HRESULT __stdcall UWnd::Refresh(BOOL bErase)
 {
-    auto ret = ::InvalidateRect(m_hwnd, nullptr, bErase);
+    const auto ret = ::InvalidateRect(m_hwnd, nullptr, bErase);
 
-    return (ret == TRUE) ? S_OK : E_FAIL;
+    return ret ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
@@ -256,24 +322,23 @@ HRESULT __stdcall UWnd::Resize(INT32 w, INT32 h)
 {
     this->AdjustRect(w, h);
 
-    auto ret = ::SetWindowPos
+    const auto ret = ::SetWindowPos
     (
         m_hwnd, nullptr,
         0, 0, w, h,
         SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED
     );
 
-    return (ret == TRUE) ? S_OK : E_FAIL;
+    return ret ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
 
 HRESULT __stdcall UWnd::Show()
 {
-    auto ret = ::ShowWindowAsync(m_hwnd, SW_SHOWNORMAL);
-    //::UpdateWindow(m_hwnd);
+    const auto ret = ::ShowWindowAsync(m_hwnd, SW_SHOWNORMAL);
 
-    return (ret == TRUE) ? S_OK : E_FAIL;
+    return ret ? S_OK : E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
@@ -289,7 +354,7 @@ struct MonitorUnderCursor
 
         POINT pt;
         ::GetCursorPos(&pt);
-        auto hMonitor = ::MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+        const auto hMonitor = ::MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
 
         MONITORINFOEX miex = { };
         miex.cbSize = sizeof(miex);
@@ -314,7 +379,7 @@ HRESULT __stdcall UWnd::ToCenter()
 {
     console_out(TEXT("UWnd::ToCenter() begin"));
 
-    if ( this->Parent() )
+    if ( this->parent() )
     {
         console_out(TEXT("This window has parent ... operation canceled"));
         console_out(TEXT("UWnd::ToCenter() end"));
@@ -322,10 +387,10 @@ HRESULT __stdcall UWnd::ToCenter()
     }
 
     MonitorUnderCursor moniter;
-    auto x = (moniter.witdh  - m_w) / 2 + moniter.x;
-    auto y = (moniter.height - m_h) / 2 + moniter.y;
+    const auto x = (moniter.witdh  - m_w) / 2 + moniter.x;
+    const auto y = (moniter.height - m_h) / 2 + moniter.y;
 
-    auto result = this->Move(x, y);
+    const auto result = this->Move(x, y);
 
     console_out(TEXT("UWnd::ToCenter() end"));
 
@@ -334,19 +399,19 @@ HRESULT __stdcall UWnd::ToCenter()
 
 //---------------------------------------------------------------------------//
 
-HRESULT __stdcall UWnd::ToggleFullScreen(INT32 w, INT32 h)
+HRESULT __stdcall UWnd::ToggleFullScreen()
 {
     console_out(TEXT("UWnd::ToggleFullScreen() begin"));
 
-    m_fullscreen = !m_fullscreen;
-    console_out(TEXT("ToggleFullScreen: %s"), m_fullscreen ? TEXT("true") : TEXT("false"));
+    m_is_fullscreen = ! m_is_fullscreen;
+    console_out(TEXT("ToggleFullScreen: %s"), m_is_fullscreen ? TEXT("true") : TEXT("false"));
 
     MonitorUnderCursor moniter;
 
     HRESULT hr;
-    if ( m_fullscreen )
+    if ( m_is_fullscreen )
     {
-        auto style = this->Style() | WS_POPUP | WS_MINIMIZEBOX;
+        const auto style = this->style() | WS_POPUP | WS_MINIMIZEBOX;
         ::SetWindowLongPtr(m_hwnd, GWL_STYLE, (LONG_PTR)style);
 
         DEVMODE dm = { };
@@ -366,17 +431,16 @@ HRESULT __stdcall UWnd::ToggleFullScreen(INT32 w, INT32 h)
     }
     else
     {
-        auto style = this->Style() ^ WS_POPUP;
+        const auto style = this->style() ^ WS_POPUP;
         ::SetWindowLongPtr(m_hwnd, GWL_STYLE, (LONG_PTR)style);
-
-        this->AdjustRect(w, h);
 
         ::SetWindowPos
         (
             m_hwnd, nullptr,
-            (moniter.witdh  - w) / 2 + moniter.x,
-            (moniter.height - h) / 2 + moniter.y,
-            w, h,
+            m_win_rect.left,
+            m_win_rect.top,
+            m_win_rect.right - m_win_rect.left,
+            m_win_rect.bottom - m_win_rect.top,
             SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW
         );
 
@@ -388,6 +452,10 @@ HRESULT __stdcall UWnd::ToggleFullScreen(INT32 w, INT32 h)
     return hr;
 }
 
+//---------------------------------------------------------------------------//
+//
+// Window Procedure to be Overriden
+//
 //---------------------------------------------------------------------------//
 
 LRESULT __stdcall UWnd::WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp)
@@ -405,14 +473,17 @@ LRESULT __stdcall UWnd::WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp)
 }
 
 //---------------------------------------------------------------------------//
+//
+// Inner Utility Functions
+//
+//---------------------------------------------------------------------------//
 
-void __stdcall UWnd::Register(LPCTSTR lpszClassName)
+void __stdcall UWnd::Register() const
 {
     // ウィンドウクラスを登録
     WNDCLASSEX wc = { };
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    wc.lpfnWndProc   = UWnd::StaticWndProc;
     wc.cbClsExtra    = 0;
     wc.cbWndExtra    = 0;
     wc.hInstance     = ::GetModuleHandle(nullptr);
@@ -420,83 +491,90 @@ void __stdcall UWnd::Register(LPCTSTR lpszClassName)
     wc.hCursor       = ::LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = nullptr;
     wc.lpszMenuName  = nullptr;
-    wc.lpszClassName = lpszClassName;
+    wc.lpszClassName = m_classname;
     wc.hIconSm       = nullptr;
+    wc.lpfnWndProc   = [](HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp) -> LRESULT
+    {
+        UWnd* wnd = nullptr;
 
-    auto atom = ::RegisterClassEx(&wc);
-    if ( atom == 0 )
+        // UWndオブジェクトのポインタを取得
+        if ( uMsg == WM_NCCREATE )
+        {
+            wnd = (UWnd*)((CREATESTRUCT*)lp)->lpCreateParams;
+
+            ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)wnd);
+        }
+        else
+        {
+            wnd = (UWnd*)::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+        }
+
+        // ウィンドウプロシージャの呼び出し
+        if ( nullptr == wnd )
+        {
+            console_out(TEXT("Call DefWindowProc(0x%04x)"), uMsg);
+            return ::DefWindowProc(hwnd, uMsg, wp, lp);
+        }
+        else
+        {
+            // メンバ変数に情報を保存
+            switch ( uMsg )
+            {
+                case WM_CREATE:
+                {
+                    wnd->m_hwnd = hwnd;    // ウィンドウハンドル
+                    //console_out(TEXT("Window Handle: 0x%p"), hwnd);
+                    break;
+                }
+                case WM_MOVE:
+                {
+                    if ( wnd->m_is_fullscreen )
+                    {
+                        break;
+                    }
+                    wnd->m_x = LOWORD(lp); // ウィンドウx座標
+                    wnd->m_y = HIWORD(lp); // ウィンドウy座標
+                    ::GetWindowRect(hwnd, &wnd->m_win_rect);
+                    //console_out(TEXT("(X, Y) = (%d, %d)"), wnd->m_x, wnd->m_y);
+                    break;
+                }
+                case WM_SIZE:
+                {
+                    if ( wnd->m_is_fullscreen || wp != SIZE_RESTORED )
+                    {
+                        break;
+                    }
+                    wnd->m_w = LOWORD(lp); // ウィンドウ幅
+                    wnd->m_h = HIWORD(lp); // ウィンドウ高
+                    ::GetWindowRect(hwnd, &wnd->m_win_rect);
+                    //console_out(TEXT("(Width, Height) = (%d, %d)"), wnd->m_w, wnd->m_h);
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
+            }
+            return wnd->WndProc(hwnd, uMsg, wp, lp);
+        }
+    };
+
+    const auto atom = ::RegisterClassEx(&wc);
+    if ( atom )
+    {
+        console_out(TEXT("Registered window class: \"%s\""), m_classname);
+    }
+    else
     {
         if ( GetLastError() == 0x582 )
         {
             // そのクラスは既にあります。
-            return;
         }
         else
         {
             // エラーメッセージの表示
-            ShowLastError(lpszClassName);
+            ShowLastError(m_classname);
         }
-    }
-}
-
-//---------------------------------------------------------------------------//
-
-LRESULT __stdcall UWnd::StaticWndProc
-(
-    HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp
-)
-{
-    UWnd* wnd = nullptr;
-
-    // UWndオブジェクトのポインタを取得
-    if ( uMsg == WM_NCCREATE )
-    {
-        wnd = (UWnd*)((CREATESTRUCT*)lp)->lpCreateParams;
-
-        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)wnd);
-    }
-    else
-    {
-        wnd = (UWnd*)::GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-    }
-
-    // ウィンドウプロシージャの呼び出し
-    if ( nullptr == wnd )
-    {
-        console_out(TEXT("Call DefWindowProc(0x%04x)"), uMsg);
-        return ::DefWindowProc(hwnd, uMsg, wp, lp);
-    }
-    else
-    {
-        // メンバ変数に情報を保存
-        switch ( uMsg )
-        {
-            case WM_CREATE:
-            {
-                wnd->m_hwnd = hwnd;    // ウィンドウハンドル
-                console_out(TEXT("Window Handle: 0x%p"), hwnd);
-                break;
-            }
-            case WM_MOVE:
-            {
-                wnd->m_x = LOWORD(lp); // ウィンドウx座標
-                wnd->m_y = HIWORD(lp); // ウィンドウy座標
-                console_out(TEXT("(X, Y) = (%d, %d)"), wnd->m_x, wnd->m_y);
-                break;
-            }
-            case WM_SIZE:
-            {
-                wnd->m_w = LOWORD(lp); // ウィンドウ幅
-                wnd->m_h = HIWORD(lp); // ウィンドウ高
-                console_out(TEXT("(Width, Height) = (%d, %d)"), wnd->m_w, wnd->m_h);
-                break;
-            }
-            default:
-            {
-                break;
-            }
-        }
-        return wnd->WndProc(hwnd, uMsg, wp, lp);
     }
 }
 
@@ -508,9 +586,9 @@ void __stdcall UWnd::AdjustRect(INT32& w, INT32& h) const
     console_out(TEXT("(w, h) = (%d, %d)"), w, h);
 
     RECT rc = { 0, 0, w, h };
-    BOOL  hasMenu = ::GetMenu(m_hwnd) ? TRUE : FALSE;
-    DWORD style   = this->Style();
-    DWORD styleEx = this->StyleEx();
+    const BOOL hasMenu = ::GetMenu(m_hwnd) ? TRUE : FALSE;
+    const auto style   = this->style();
+    const auto styleEx = this->styleEx();
 
     ::AdjustWindowRectEx(&rc, style, hasMenu, styleEx);
     w = rc.right  - rc.left;

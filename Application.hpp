@@ -21,7 +21,8 @@ public:
     typedef void (__stdcall* GameFunc)(void* arglist);
 
 public:
-    static Application& __stdcall app();
+    Application();
+    ~Application();
 
 public:
     int32_t __stdcall Run();
@@ -41,8 +42,6 @@ private:
     Impl* pimpl;
 
 private:
-    Application();
-    ~Application();
     Application(const Application&)             = delete;
     Application(Application&&)                  = delete;
     Application& operator= (const Application&) = delete;

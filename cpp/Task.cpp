@@ -14,7 +14,7 @@
 
 #include <windows.h>
 
-#include <DebugPrint.hpp>
+#include "DebugPrint.hpp"
 #include "Task.hpp"
 
 //---------------------------------------------------------------------------//

@@ -17,20 +17,24 @@
 class UWnd
 {
 public:
-    UWnd();
+    explicit UWnd(LPCTSTR lpszClassName);
     virtual ~UWnd();
 
 public:
-    INT32   __stdcall X()            const;
-    INT32   __stdcall Y()            const;
-    INT32   __stdcall Width()        const;
-    INT32   __stdcall Height()       const;
-    DWORD   __stdcall Style()        const;
-    DWORD   __stdcall StyleEx()      const;
-    HWND    __stdcall Handle()       const;
-    HWND    __stdcall Parent()       const;
-    LPCTSTR __stdcall ClassName()    const;
-    bool    __stdcall IsFullScreen() const;
+    UWnd(UWnd&& rhs);
+    UWnd& operator =(UWnd&& rhs);
+
+public:
+    INT32   __stdcall x()             const;
+    INT32   __stdcall y()             const;
+    INT32   __stdcall width()         const;
+    INT32   __stdcall height()        const;
+    DWORD   __stdcall style()         const;
+    DWORD   __stdcall styleEx()       const;
+    HWND    __stdcall handle()        const;
+    HWND    __stdcall parent()        const;
+    LPCTSTR __stdcall classname()     const;
+    bool    __stdcall is_fullscreen() const;
 
     virtual HRESULT __stdcall Create
     (
@@ -49,65 +53,69 @@ public:
     virtual HRESULT __stdcall Resize(INT32 w, INT32 h);
     virtual HRESULT __stdcall Show();
     virtual HRESULT __stdcall ToCenter();
-    virtual HRESULT __stdcall ToggleFullScreen(INT32 w = 0, INT32 h = 0);
+    virtual HRESULT __stdcall ToggleFullScreen();
     virtual LRESULT __stdcall WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp);
 
-protected:
-    static void    __stdcall Register(LPCTSTR lpszClassName);
-    static LRESULT __stdcall StaticWndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp);
-
 private:
+    void __stdcall Register() const;
     void __stdcall AdjustRect(INT32& w, INT32& h) const;
 
 protected:
-    INT32   m_x          = CW_USEDEFAULT;
-    INT32   m_y          = CW_USEDEFAULT;
-    INT32   m_w          = CW_USEDEFAULT;
-    INT32   m_h          = CW_USEDEFAULT;
-    HWND    m_hwnd       = nullptr;
-    LPCTSTR m_className  = nullptr;
-    bool    m_fullscreen = false;
+    INT32   m_x             = CW_USEDEFAULT;
+    INT32   m_y             = CW_USEDEFAULT;
+    INT32   m_w             = CW_USEDEFAULT;
+    INT32   m_h             = CW_USEDEFAULT;
+    HWND    m_hwnd          = nullptr;
+    LPCTSTR m_classname     = nullptr;
+    bool    m_is_fullscreen = false;
+    RECT    m_win_rect;
 
 private:
+    UWnd()                        = delete;
     UWnd(const UWnd&)             = delete;
-    UWnd(UWnd&&)                  = delete;
     UWnd& operator= (const UWnd&) = delete;
-    UWnd& operator= (UWnd&&)      = delete;
 };
 
 //---------------------------------------------------------------------------//
 
-class DWM;
-class UxTheme;
-
 // AeroGlass対応 ウィンドウの基底クラス
-class GlassWnd : public UWnd
+class AeroWnd : public UWnd
 {
 public:
-    GlassWnd();
-    ~GlassWnd();
+    explicit AeroWnd(LPCTSTR lpszClassName);
+    ~AeroWnd();
+
+public:
+    bool __stdcall is_enable_aero() const;
 
 public:
     virtual LRESULT __stdcall WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp) override;
 
-protected:
-    virtual LRESULT __stdcall OnDwmCompositionChanged(HWND hwnd);
-    virtual LRESULT __stdcall OnThemeChanged(HWND hwnd);
+public:
+    virtual void __stdcall EnableAero();
+    virtual void __stdcall DisableAero();
 
 protected:
-    DWM*     dwm           = nullptr;
-    UxTheme* uxtheme       = nullptr;
-    HANDLE   m_hTheme      = nullptr;
-    BOOL     m_compEnabled = FALSE;
+    virtual LRESULT __stdcall OnDwmCompositionChanged();
+    virtual LRESULT __stdcall OnThemeChanged();
+
+protected:
+    bool   m_enabled     = true;
+    HANDLE m_hTheme      = nullptr;
+    BOOL   m_compEnabled = FALSE;
+
+private:
+    struct Impl;
+    Impl* pimpl;
 };
 
 //---------------------------------------------------------------------------//
 
 // OpenGL で描画するウィンドウの基底クラス
-class OpenGLWnd : public GlassWnd
+class OpenGLWnd : public AeroWnd
 {
 public:
-    OpenGLWnd();
+    explicit OpenGLWnd(LPCTSTR lpszClassName);
     ~OpenGLWnd();
 
 public:

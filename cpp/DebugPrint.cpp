@@ -92,7 +92,7 @@ private:
             system("pause");
         }
 
-        ::FreeConsole();
+        //::FreeConsole();
     }
 };
 

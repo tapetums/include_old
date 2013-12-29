@@ -132,15 +132,6 @@ struct Application::Impl
 
 //---------------------------------------------------------------------------//
 
-Application& __stdcall Application::app()
-{
-    static Application app_;
-
-    return app_;
-}
-
-//---------------------------------------------------------------------------//
-
 Application::Application()
 {
     pimpl = new Impl;
@@ -192,7 +183,7 @@ int32_t __stdcall Application::Run(uint16_t numerator, uint16_t denominator)
 
     console_out(TEXT("---------------- Message Loop ----------------"));
 
-    const auto func_list = &pimpl->func_list;
+    const auto& func_list = pimpl->func_list;
 
     m_is_running = true;
     while ( m_is_running )
@@ -210,7 +201,7 @@ int32_t __stdcall Application::Run(uint16_t numerator, uint16_t denominator)
         {
             if ( timer.HasTimeCome() )
             {
-                for ( const auto& item: *func_list )
+                for ( const auto& item: func_list )
                 {
                     item.execute(item.arglist);
                 }
@@ -235,13 +226,9 @@ int32_t __stdcall Application::Run(uint16_t numerator, uint16_t denominator)
 
 void __stdcall Application::Exit(int32_t nExitCode)
 {
-    console_out(TEXT("Application::Exit() begin"));
-
     m_is_running = false;
 
     ::PostQuitMessage(nExitCode);
-
-    console_out(TEXT("Application::Exit() end"));
 }
 
 //---------------------------------------------------------------------------//

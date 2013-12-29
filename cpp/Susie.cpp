@@ -9,8 +9,8 @@
 
 #include <strsafe.h>
 
-#include <DebugPrint.hpp>
-#include <UString.hpp>
+#include "DebugPrint.hpp"
+#include "UString.hpp"
 
 #include "Susie.hpp"
 
@@ -327,7 +327,7 @@ LPCTSTR __stdcall Susie::SpiPath() const
 // 同じバッファ内に無理矢理つっこむ関数
 void __stdcall MBCSztoUnicodez(char* buf, size_t buflen)
 {
-    auto tmp = toUnicodez(buf);
+    const auto tmp = toUnicodez(buf);
 
     ::memcpy(buf, tmp, buflen);
     buf[buflen - 1] = '\0';
@@ -339,9 +339,9 @@ void __stdcall MBCSztoUnicodez(char* buf, size_t buflen)
 // 同じバッファ内に無理矢理つっこむ関数
 void __stdcall UnicodeztoMBCSz(wchar_t* buf)
 {
-    auto tmp = toMBCSz(buf);
-    auto buflen = sizeof(wchar_t) * (::wcslen(buf) + 1);
-    auto tmplen = sizeof(char)    * (::strlen(tmp) + 1);
+    const auto tmp = toMBCSz(buf);
+    const auto buflen = sizeof(wchar_t) * (::wcslen(buf) + 1);
+    const auto tmplen = sizeof(char)    * (::strlen(tmp) + 1);
 
     ::memset(buf, 0, buflen);
     ::memcpy(buf, tmp, min(buflen, tmplen));
@@ -357,7 +357,7 @@ SUSIE_API Susie::GetPluginInfo(int32_t infono, LPWSTR buf, int32_t buflen)
     }
     else if ( m_GetPluginInfoA )
     {
-        auto result = m_GetPluginInfoA(infono, (LPSTR)buf, buflen);
+        const auto result = m_GetPluginInfoA(infono, (LPSTR)buf, buflen);
         if ( result == SPI_ALL_RIGHT )
         {
             MBCSztoUnicodez((LPSTR)buf, buflen);
@@ -496,7 +496,7 @@ SUSIE_API Susie::GetFileInfo(LPCWSTR buf, size_t len, LPCWSTR filename, SPI_FLAG
         }
 
         SusieFileInfoA info;
-        auto result =  m_GetFileInfoA((LPCSTR)buf, len, (LPCSTR)filename, flag, &info);
+        const auto result =  m_GetFileInfoA((LPCSTR)buf, len, (LPCSTR)filename, flag, &info);
         if ( result == SPI_ALL_RIGHT )
         {
             ::CopyMemory(lpInfo,           &info,          sizeof(uint8_t)*8 + sizeof(size_t)*3 + sizeof(susie_time_t));

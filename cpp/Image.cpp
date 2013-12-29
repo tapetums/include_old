@@ -12,16 +12,24 @@
 
 //---------------------------------------------------------------------------//
 
-#ifdef THIS
-#undef THIS
-#endif
+class CriticalSection
+{
+public:
+    CriticalSection()  { ::InitializeCriticalSection(&cs); }
+    ~CriticalSection() { ::DeleteCriticalSection(&cs); }
+    void __stdcall lock()   { ::EnterCriticalSection(&cs); }
+    void __stdcall unlock() { ::LeaveCriticalSection(&cs); }
 
-#define THIS Bitmap
+private:
+    CRITICAL_SECTION cs;
+};
 
 //---------------------------------------------------------------------------//
 
-struct THIS::Impl
+struct Bitmap::Impl
 {
+    CriticalSection cs;
+
     BITMAPINFO* bmpinfo   = nullptr;
     int32_t     width     = 0;
     int32_t     height    = 0;
@@ -101,7 +109,7 @@ struct THIS::Impl
 
 //---------------------------------------------------------------------------//
 
-Bitmap::THIS()
+Bitmap::Bitmap()
 {
     console_out(TEXT("%s::ctor begin"), NAME);
 
@@ -114,7 +122,7 @@ Bitmap::THIS()
 
 //---------------------------------------------------------------------------//
 
-Bitmap::~THIS()
+Bitmap::~Bitmap()
 {
     console_out(TEXT("%s::dtor begin"), NAME);
 
@@ -221,7 +229,7 @@ int32_t __stdcall Bitmap::width() const
 
 int32_t __stdcall Bitmap::height() const
 {
-    return pimpl->width;
+    return pimpl->height;
 }
 
 //---------------------------------------------------------------------------//
@@ -320,13 +328,11 @@ HRESULT __stdcall Bitmap::Dispose()
 
 Image* __stdcall Bitmap::Clone()
 {
-    /// TODO: この関数をスレッドセーフにする
-
     console_out(TEXT("%s::Clone() begin"), NAME);
 
     auto bitmap = new Bitmap;
 
-    /// TODO: 排他処理ここから
+    pimpl->cs.lock();
     {
         // ヘッダ情報のコピー
         bitmap->Create(pimpl->bmpinfo);
@@ -334,7 +340,7 @@ Image* __stdcall Bitmap::Clone()
         // ピクセルデータのコピー
         ::memcpy(bitmap->pimpl->data, pimpl->data, bitmap->pimpl->data_size);
     }
-    /// TODO: 排他処理ここまで
+    pimpl->cs.unlock();
 
     console_out(TEXT("%s::Clone() end"), NAME);
 
@@ -354,7 +360,7 @@ HRESULT __stdcall Bitmap::Load(LPCWSTR filename)
         this->Dispose();
     }
 
-    auto hFile = ::CreateFile
+    const auto hFile = ::CreateFile
     (
         filename, GENERIC_READ, FILE_SHARE_READ, nullptr,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr
@@ -374,7 +380,7 @@ HRESULT __stdcall Bitmap::Load(LPCWSTR filename)
     ::ReadFile(hFile, &bmpfh, sizeof(BITMAPFILEHEADER), &dwRead, nullptr);
     console_out(TEXT("%d bytes read"), dwRead);
 
-    auto p = (char*)&bmpfh;
+    const auto p = (char*)&bmpfh;
     console_out(TEXT("The first 2 characters: %c%c"), p[0], p[1]);
     if ( bmpfh.bfType != 0x4D42 ) // 0x4D42 = "BM" ( @little endian )
     {
@@ -383,27 +389,24 @@ HRESULT __stdcall Bitmap::Load(LPCWSTR filename)
         goto CLOSE_FILE;
     }
 
-    // ヘッダ情報およびパレット情報の読み込み ( V4やV5でもこれでOK )
     DWORD bmi_size = bmpfh.bfOffBits - sizeof(BITMAPFILEHEADER);
-    pimpl->bmpinfo = (BITMAPINFO*) new uint8_t[bmi_size];
     console_out(TEXT("Bitmap header size: %d"), bmi_size);
 
-    ::ReadFile(hFile, pimpl->bmpinfo, bmi_size, &dwRead, nullptr);
-    console_out(TEXT("%d bytes read"), dwRead);
-
-    if ( nullptr == pimpl->bmpinfo )
+    pimpl->cs.lock();
     {
-        console_out(TEXT("Failed to load header information"));
-        hr = E_FAIL;
-        goto CLOSE_FILE;
+        // ヘッダ情報およびパレット情報の読み込み ( V4やV5でもこれでOK )
+        pimpl->bmpinfo = (BITMAPINFO*) new uint8_t[bmi_size];
+        ::ReadFile(hFile, pimpl->bmpinfo, bmi_size, &dwRead, nullptr);
+        console_out(TEXT("%d bytes read"), dwRead);
+
+        // 内部データの初期化
+        pimpl->InitiInternal();
+
+        // ピクセルデータの読み込み
+        ::ReadFile(hFile, pimpl->data, pimpl->data_size, &dwRead, nullptr);
+        console_out(TEXT("%d bytes read"), dwRead);
     }
-
-    // 内部データの初期化
-    pimpl->InitiInternal();
-
-    // ピクセルデータの読み込み
-    ::ReadFile(hFile, pimpl->data, pimpl->data_size, &dwRead, nullptr);
-    console_out(TEXT("%d bytes read"), dwRead);
+    pimpl->cs.unlock();
 
     hr = S_OK;
 
@@ -411,7 +414,6 @@ CLOSE_FILE:
     if ( hFile )
     {
         ::CloseHandle(hFile);
-        hFile = nullptr;
     }
 
     console_out(TEXT("%s::Load() end"), NAME);
@@ -433,7 +435,7 @@ HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
         return S_FALSE;
     }
 
-    auto hFile = ::CreateFile
+    const auto hFile = ::CreateFile
     (
         filename, GENERIC_WRITE, FILE_SHARE_WRITE, nullptr,
         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr
@@ -448,36 +450,39 @@ HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
     HRESULT hr;
     DWORD   dwWritten;
 
-    // ファイルヘッダの書き出し
-    BITMAPFILEHEADER bmpfh = { };
-    bmpfh.bfType      = 0x4D42; // "BM" @ little endian
-    bmpfh.bfOffBits   = sizeof(BITMAPFILEHEADER) +
-                        pimpl->bmpinfo->bmiHeader.biSize + sizeof(RGBQUAD) * pimpl->clrused;
-    bmpfh.bfReserved1 = 0;
-    bmpfh.bfReserved2 = 0;
-    bmpfh.bfSize      = bmpfh.bfOffBits + pimpl->bmpinfo->bmiHeader.biSizeImage;
-    ::WriteFile(hFile, &bmpfh, sizeof(BITMAPFILEHEADER), &dwWritten, nullptr);
-    console_out(TEXT("%d bytes wrote"), dwWritten);
+    pimpl->cs.lock();
+    {
+        // ファイルヘッダの書き出し
+        BITMAPFILEHEADER bmpfh = { };
+        bmpfh.bfType      = 0x4D42; // "BM" @ little endian
+        bmpfh.bfOffBits   = sizeof(BITMAPFILEHEADER) +
+                            pimpl->bmpinfo->bmiHeader.biSize + sizeof(RGBQUAD) * pimpl->clrused;
+        bmpfh.bfReserved1 = 0;
+        bmpfh.bfReserved2 = 0;
+        bmpfh.bfSize      = bmpfh.bfOffBits + pimpl->bmpinfo->bmiHeader.biSizeImage;
+        ::WriteFile(hFile, &bmpfh, sizeof(BITMAPFILEHEADER), &dwWritten, nullptr);
+        console_out(TEXT("%d bytes wrote"), dwWritten);
 
-    // ヘッダ情報およびパレット情報の書き出し
-    ::WriteFile
-    (
-        hFile, pimpl->bmpinfo,
-        pimpl->bmpinfo->bmiHeader.biSize + sizeof(RGBQUAD) * pimpl->clrused,
-        &dwWritten, nullptr
-    );
-    console_out(TEXT("%d bytes wrote"), dwWritten);
+        // ヘッダ情報およびパレット情報の書き出し
+        ::WriteFile
+        (
+            hFile, pimpl->bmpinfo,
+            pimpl->bmpinfo->bmiHeader.biSize + sizeof(RGBQUAD) * pimpl->clrused,
+            &dwWritten, nullptr
+        );
+        console_out(TEXT("%d bytes wrote"), dwWritten);
 
-    // ピクセルデータの書き出し
-    ::WriteFile(hFile, pimpl->data, pimpl->data_size, &dwWritten, nullptr);
-    console_out(TEXT("%d bytes wrote"), dwWritten);
+        // ピクセルデータの書き出し
+        ::WriteFile(hFile, pimpl->data, pimpl->data_size, &dwWritten, nullptr);
+        console_out(TEXT("%d bytes wrote"), dwWritten);
+    }
+    pimpl->cs.unlock();
 
     hr = S_OK;
 
     if ( hFile )
     {
         ::CloseHandle(hFile);
-        hFile = nullptr;
     }
 
     console_out(TEXT("%s::Save() end"), NAME);
@@ -489,15 +494,13 @@ HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
 
 HRESULT __stdcall Bitmap::UpsideDown()
 {
-    /// TODO: この関数をスレッドセーフにする
-
     console_out(TEXT("%s::UpsideDown() begin"), NAME);
 
     int32_t  height;
     int32_t  stride;
     uint8_t* data;
 
-    /// TODO: 排他処理ここから
+    pimpl->cs.lock();
     {
         height = pimpl->height;
         stride = pimpl->stride;
@@ -511,11 +514,11 @@ HRESULT __stdcall Bitmap::UpsideDown()
         }
 
         delete[] pimpl->data;
-    }
-    /// TODO: 排他処理ここまで
 
-    pimpl->data = data;
-    pimpl->bmpinfo->bmiHeader.biHeight *= -1;
+        pimpl->data = data;
+        pimpl->bmpinfo->bmiHeader.biHeight *= -1;
+    }
+    pimpl->cs.unlock();
 
     console_out(TEXT("%s::UpsideDown() end"), NAME);
 
@@ -524,11 +527,9 @@ HRESULT __stdcall Bitmap::UpsideDown()
 
 //---------------------------------------------------------------------------//
 
-HRESULT __stdcall Bitmap::ToBGRA()
+HRESULT __stdcall Bitmap::ToBGRA32()
 {
-    /// TODO: この関数をスレッドセーフにする
-
-    console_out(TEXT("%s::ToBGRA() begin"), NAME);
+    console_out(TEXT("%s::ToBGRA32() begin"), NAME);
 
     int32_t     height;
     int32_t     width;
@@ -536,10 +537,10 @@ HRESULT __stdcall Bitmap::ToBGRA()
     uint8_t*    data;
     BITMAPINFO* bmpinfo;
 
-    /// TODO: 排他処理ここから
+    pimpl->cs.lock();
     {
         // ヘッダ情報のコピー
-        auto bmi_size = pimpl->bmpinfo->bmiHeader.biSize;
+        const auto bmi_size = pimpl->bmpinfo->bmiHeader.biSize;
         bmpinfo = (BITMAPINFO*) new uint8_t[bmi_size];
         memcpy(bmpinfo, pimpl->bmpinfo, bmi_size);
         bmpinfo->bmiHeader.biSize = bmi_size;
@@ -587,35 +588,31 @@ HRESULT __stdcall Bitmap::ToBGRA()
         {
             delete[] data;
             console_out(TEXT("Unsupported bit color"));
-            console_out(TEXT("%s::ToBGRA() end"), NAME);
-            return E_NOTIMPL;
+            console_out(TEXT("%s::ToBGRA32() end"), NAME);
+            return E_FAIL;
         }
 
         delete[] pimpl->bmpinfo;
         delete[] pimpl->data;
-    }
-    /// TODO: 排他処理ここまで
 
-    pimpl->bmpinfo = bmpinfo;
-    pimpl->bmpinfo->bmiHeader.biBitCount  = 32;
-    pimpl->bmpinfo->bmiHeader.biClrUsed   = 0;
-    pimpl->bmpinfo->bmiHeader.biSizeImage = data_size;
-    pimpl->bitcount  = 32;
-    pimpl->clrused   = 0;
-    pimpl->stride    = 4 * width;
-    pimpl->data_size = data_size;
-    pimpl->data      = data;
+        pimpl->bmpinfo = bmpinfo;
+        pimpl->bmpinfo->bmiHeader.biBitCount  = 32;
+        pimpl->bmpinfo->bmiHeader.biClrUsed   = 0;
+        pimpl->bmpinfo->bmiHeader.biSizeImage = data_size;
+        pimpl->bitcount  = 32;
+        pimpl->clrused   = 0;
+        pimpl->stride    = 4 * width;
+        pimpl->data_size = data_size;
+        pimpl->data      = data;
+    }
+    pimpl->cs.unlock();
 
     pimpl->ShowParameters();
 
-    console_out(TEXT("%s::ToBGRA() end"), NAME);
+    console_out(TEXT("%s::ToBGRA32() end"), NAME);
 
     return S_OK;
 }
-
-//---------------------------------------------------------------------------//
-
-#undef THIS
 
 //---------------------------------------------------------------------------//
 

@@ -20,11 +20,6 @@
 
 //---------------------------------------------------------------------------//
 
-#define BASE GlassWnd
-#define NAME TEXT("OpenGLWnd")
-
-//---------------------------------------------------------------------------//
-
 static const PIXELFORMATDESCRIPTOR pfd =
 {
     sizeof(PIXELFORMATDESCRIPTOR),
@@ -68,30 +63,27 @@ static void __stdcall OutputLastError()
 
 //---------------------------------------------------------------------------//
 
-OpenGLWnd::OpenGLWnd()
+OpenGLWnd::OpenGLWnd(LPCTSTR lpszClassName) : AeroWnd(lpszClassName)
 {
-    console_out(TEXT("%s::ctor begin"), NAME);
+    console_out(TEXT("OpenGLWnd::ctor begin"));
 
-    m_className = TEXT("OpenGLWnd");
-    UWnd::Register(m_className);
-
-    console_out(TEXT("%s::ctor end"), NAME);
+    console_out(TEXT("OpenGLWnd::ctor end"));
 }
 
 //---------------------------------------------------------------------------//
 
 OpenGLWnd::~OpenGLWnd()
 {
-    console_out(TEXT("%s::dtor begin"), NAME);
+    console_out(TEXT("OpenGLWnd::dtor begin"));
 
-    console_out(TEXT("%s::dtor end"), NAME);
+    console_out(TEXT("OpenGLWnd::dtor end"));
 }
 
 //---------------------------------------------------------------------------//
 
 void __stdcall OpenGLWnd::CreateContext()
 {
-    console_out(TEXT("%s::CreateContext() begin"), NAME);
+    console_out(TEXT("OpenGLWnd::CreateContext() begin"));
 
     m_dc = ::GetDC(m_hwnd);
 
@@ -115,14 +107,14 @@ void __stdcall OpenGLWnd::CreateContext()
     ::wglMakeCurrent(m_dc, m_glrc);
     console_out(TEXT("HGLRC: 0x%p"), m_glrc);
 
-    console_out(TEXT("%s::CreateContext() end"), NAME);
+    console_out(TEXT("OpenGLWnd::CreateContext() end"));
 }
 
 //---------------------------------------------------------------------------//
 
 void __stdcall OpenGLWnd::ReleaseContext()
 {
-    console_out(TEXT("%s::ReleaseContext() begin"), NAME);
+    console_out(TEXT("OpenGLWnd::ReleaseContext() begin"));
 
     ::wglMakeCurrent(m_dc, nullptr);
 
@@ -132,12 +124,8 @@ void __stdcall OpenGLWnd::ReleaseContext()
     ::ReleaseDC(m_hwnd, m_dc);
     m_dc = nullptr;
 
-    console_out(TEXT("%s::ReleaseContext() end"), NAME);
+    console_out(TEXT("OpenGLWnd::ReleaseContext() end"));
 }
-
-//---------------------------------------------------------------------------//
-
-#undef BASE
 
 //---------------------------------------------------------------------------//
 

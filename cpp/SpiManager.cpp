@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include <DebugPrint.hpp>
+#include "DebugPrint.hpp"
 
 #include "Susie.hpp"
 

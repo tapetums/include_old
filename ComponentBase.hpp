@@ -15,6 +15,10 @@
 //
 //---------------------------------------------------------------------------//
 
+#include "Interfaces.hpp"
+
+//---------------------------------------------------------------------------//
+
 // 前方宣言
 typedef unsigned char char8_t;
 
@@ -61,12 +65,12 @@ public:
     ULONG   __stdcall Release() override;
 
 public:
-    REFCLSID      __stdcall clsid()    const override;
-    ICompManager* __stdcall manager()  const override;
-    U8CSTR        __stdcall name()     const override;
-    IComponent*   __stdcall owner()    const override;
-    IDataArray*   __stdcall property() const override;
-    STATE         __stdcall status()   const override;
+    REFCLSID         __stdcall clsid()      const override;
+    ICompCollection* __stdcall collection() const override;
+    U8CSTR           __stdcall name()       const override;
+    IComponent*      __stdcall owner()      const override;
+    IDataArray*      __stdcall property()   const override;
+    STATE            __stdcall status()     const override;
 
     HRESULT __stdcall AttachMessage(U8CSTR msg, IComponent* listener) override;
     HRESULT __stdcall DetachMessage(U8CSTR msg, IComponent* listener) override;
@@ -86,6 +90,57 @@ private:
     Component(Component&&)                  = delete;
     Component& operator =(const Component&) = delete;
     Component& operator =(Component&&)      = delete;
+};
+
+//---------------------------------------------------------------------------//
+
+// 入力コンポーネントの基底クラス
+class ReaderComponent : public IReaderComponent
+{
+public:
+    explicit ReaderComponent(IUnknown* pUnkOuter = nullptr);
+    virtual ~ReaderComponent();
+
+public:
+    HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObject) override;
+    ULONG   __stdcall AddRef() override;
+    ULONG   __stdcall Release() override;
+
+public:
+    REFCLSID         __stdcall clsid()      const override;
+    ICompCollection* __stdcall collection() const override;
+    U8CSTR           __stdcall name()       const override;
+    IComponent*      __stdcall owner()      const override;
+    IDataArray*      __stdcall property()   const override;
+    STATE            __stdcall status()     const override;
+
+    HRESULT __stdcall AttachMessage(U8CSTR msg, IComponent* listener) override;
+    HRESULT __stdcall DetachMessage(U8CSTR msg, IComponent* listener) override;
+    HRESULT __stdcall NotifyMessage(U8CSTR msg, IComponent* sender, IComponent* listener, IData* data) override;
+    HRESULT __stdcall Start(void* args, IComponent* listener = nullptr) override;
+    HRESULT __stdcall Stop (void* args, IComponent* listener = nullptr) override;
+
+public:
+    HRESULT __stdcall Close(IComponent* listener = nullptr) override;
+    HRESULT __stdcall Open(U8CSTR path, U8CSTR format_as, IComponent* listener = nullptr) override;
+    HRESULT __stdcall QuerySupport(U8CSTR path, U8CSTR format_as) override;
+    HRESULT __stdcall Seek(int64_t offset, uint32_t origin, uint64_t* new_pos) override;
+
+public:
+    HRESULT __stdcall Read(void* buffer, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) override;
+
+protected:
+    ULONG       m_cRef     = 0;
+    STATE       m_state    = STATE::UNKNOWN;
+    MessageMap* m_msg_map  = nullptr;
+    IComponent* m_owner    = nullptr;
+    IDataArray* m_property = nullptr;
+
+private:
+    ReaderComponent(const ReaderComponent&)             = delete;
+    ReaderComponent(ReaderComponent&&)                  = delete;
+    ReaderComponent& operator =(const ReaderComponent&) = delete;
+    ReaderComponent& operator =(ReaderComponent&&)      = delete;
 };
 
 //---------------------------------------------------------------------------//

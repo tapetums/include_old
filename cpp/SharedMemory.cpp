@@ -11,9 +11,9 @@
 #include <windows.h>
 #include <strsafe.h>
 
-#include <MeteredSection.h>
-#include <DebugPrint.hpp>
-#include <GenerateUUIDString.hpp>
+#include "MeteredSection.h"
+#include "DebugPrint.hpp"
+#include "GenerateUUIDString.hpp"
 
 #include "SharedMemory.hpp"
 
@@ -395,7 +395,7 @@ bool __stdcall SharedMemory::Open
 
     // イベントオブジェクトおよび同期オブジェクトを取得
     pimpl->msection  = ::OpenMeteredSectionA(pimpl->info->chunk_sync.m_sct_name);
-    pimpl->evt_block = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_w_name);
+    pimpl->evt_block = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_b_name);
     pimpl->evt_read  = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_r_name);
     pimpl->evt_write = ::OpenEventA(EVENT_ALL_ACCESS, FALSE, pimpl->info->chunk_sync.evt_w_name);
 
@@ -506,7 +506,6 @@ size_t __stdcall SharedMemory::Read
         console_out(TEXT("SharedMemory::Read() end"));
         return 0;
     }
-
     if ( nullptr == buffer )
     {
         console_out(TEXT("Invalid args: 0x%p"), buffer);
@@ -514,6 +513,7 @@ size_t __stdcall SharedMemory::Read
         return 0;
     }
 
+    // 読み込みサイズを計算する
     size_t cb_read;
     #if defined(_WIN64) || defined(WIN64)
         cb_read = min(size, pimpl->info->chunk_ds64.dataSize - offset);
@@ -600,7 +600,6 @@ size_t __stdcall SharedMemory::Write
         console_out(TEXT("SharedMemory::Write() end"));
         return 0;
     }
-
     if ( nullptr == buffer )
     {
         console_out(TEXT("Invalid args: 0x%p"), buffer);
@@ -608,6 +607,7 @@ size_t __stdcall SharedMemory::Write
         return 0;
     }
 
+    // 書き込みサイズを計算する
     size_t cb_written;
     #if defined(_WIN64) || defined(WIN64)
         cb_written = min(size, pimpl->info->chunk_ds64.dataSize - offset);

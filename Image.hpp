@@ -31,22 +31,16 @@ interface Image : public IUnknown
 
 //---------------------------------------------------------------------------//
 
-#ifdef THIS
-#undef THIS
-#endif
-
-#define THIS Bitmap
-
 class Bitmap : public Image
 {
 public:
-    THIS();
-    ~THIS();
+    Bitmap();
+    ~Bitmap();
 
 public:
-    HRESULT __stdcall  QueryInterface(REFIID riid, void** ppvObject) override;
-    ULONG   __stdcall  AddRef() override;
-    ULONG   __stdcall  Release() override;
+    HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObject) override;
+    ULONG   __stdcall AddRef() override;
+    ULONG   __stdcall Release() override;
 
 public:
     BITMAPINFO* __stdcall bmpinfo()    const override;
@@ -67,7 +61,7 @@ public:
     HRESULT __stdcall Load(LPCWSTR filename);
     HRESULT __stdcall Save(LPCWSTR filename);
     HRESULT __stdcall UpsideDown();
-    HRESULT __stdcall ToBGRA();
+    HRESULT __stdcall ToBGRA32();
 
 protected:
     ULONG m_cRef = 0;
@@ -77,13 +71,11 @@ private:
     Impl* pimpl;
 
 private:
-    THIS(const THIS& lval)             = delete;
-    THIS(THIS&& rval)                  = delete;
-    THIS& operator =(const THIS& lval) = delete;
-    THIS& operator =(THIS&& rval)      = delete;
+    Bitmap(const Bitmap& lval)             = delete;
+    Bitmap(Bitmap&& rval)                  = delete;
+    Bitmap& operator =(const Bitmap& lval) = delete;
+    Bitmap& operator =(Bitmap&& rval)      = delete;
 };
-
-#undef THIS
 
 //---------------------------------------------------------------------------//
 
