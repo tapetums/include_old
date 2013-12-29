@@ -10,8 +10,8 @@ extern ULONG g_cLocks;
 
 //---------------------------------------------------------------------------//
 
-void LockModule();
-void UnlockModule();
+void __stdcall LockModule();
+void __stdcall UnlockModule();
 
 //---------------------------------------------------------------------------//
 

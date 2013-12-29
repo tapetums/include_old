@@ -8,16 +8,16 @@ extern ULONG g_cLocks = 0;
 
 //---------------------------------------------------------------------------//
 
-void LockModule()
+void __stdcall LockModule()
 {
-     ::InterlockedIncrement(&g_cLocks);
+     InterlockedIncrement(&g_cLocks);
 }
 
 //---------------------------------------------------------------------------//
 
-void UnlockModule()
+void __stdcall UnlockModule()
 {
-    ::InterlockedDecrement(&g_cLocks);
+    InterlockedDecrement(&g_cLocks);
 }
 
 //---------------------------------------------------------------------------//
