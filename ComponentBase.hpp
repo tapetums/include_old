@@ -11,7 +11,6 @@
 //  (e.g. class Hoge : public Interface, public ClassBase {}; )
 //  「定義があいまい」コンパイルエラーになるので、
 //   仕方なく重複するコードを複数の .cpp ファイルに書いています。
-//  解決策が見つかれば改善する予定
 //
 //---------------------------------------------------------------------------//
 
@@ -124,10 +123,9 @@ public:
     HRESULT __stdcall Close(IComponent* listener = nullptr) override;
     HRESULT __stdcall Open(U8CSTR path, U8CSTR format_as, IComponent* listener = nullptr) override;
     HRESULT __stdcall QuerySupport(U8CSTR path, U8CSTR format_as) override;
-    HRESULT __stdcall Seek(int64_t offset, uint32_t origin, uint64_t* new_pos) override;
 
 public:
-    HRESULT __stdcall Read(void* buffer, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) override;
+    HRESULT __stdcall Read(void* buffer, size_t offset, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) override;
 
 protected:
     ULONG       m_cRef     = 0;

@@ -2,6 +2,8 @@
 
 #pragma once
 
+#pragma execution_character_set("utf-8") 
+
 //---------------------------------------------------------------------------//
 //
 // CubeMelon コンポーネント API ヘッダー
@@ -120,12 +122,6 @@ static U8CSTR ja_JP = (U8CSTR)"ja-JP";
 static U8CSTR en_US = (U8CSTR)"en-US";
 
 //---------------------------------------------------------------------------//
-
-// HRESULT
-static const HRESULT S_OK_ASYNC = 0x00000002;
-static const HRESULT E_BUSY     = 0x8FFFFFFF;
-
-//---------------------------------------------------------------------------//
 //
 // 列挙体
 //
@@ -200,6 +196,11 @@ inline bool __stdcall operator !=(const STATE& lhs, const STATE& rhs)
 }
 
 //---------------------------------------------------------------------------//
+
+// コンポーネントの状態を調べるマクロ
+#define IS_COMP_BUSY(x) x ? (x->status() >= STATE::OPENING) : false
+
+//---------------------------------------------------------------------------//
 //
 // 構造体
 //
@@ -221,7 +222,7 @@ struct VerInfo
 //---------------------------------------------------------------------------//
 
 // API のバージョン
-static const VerInfo API_VERSION = { 1, 0, 0, 'a' };
+static const VerInfo API_VERSION { 1, 0, 0, 'a' };
 
 //---------------------------------------------------------------------------//
 //
@@ -232,10 +233,10 @@ static const VerInfo API_VERSION = { 1, 0, 0, 'a' };
 // 汎用データ格納オブジェクトのインターフェイス
 interface IData : public IUnknown
 {
-    virtual U8CSTR  __stdcall name()     const = 0;
-    virtual size_t  __stdcall size()     const = 0;
-    virtual void*   __stdcall get()      const = 0;
-    virtual HRESULT __stdcall set(void* value) = 0;
+    virtual U8CSTR      __stdcall name()     const = 0;
+    virtual size_t      __stdcall size()     const = 0;
+    virtual uintptr_t   __stdcall get()      const = 0;
+    virtual HRESULT     __stdcall set(uintptr_t value) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -320,7 +321,6 @@ interface IIOComponent : public IComponent
     virtual HRESULT __stdcall Close(IComponent* listener = nullptr) = 0;
     virtual HRESULT __stdcall Open(U8CSTR path, U8CSTR format_as, IComponent* listener = nullptr) = 0;
     virtual HRESULT __stdcall QuerySupport(U8CSTR path, U8CSTR format_as) = 0;
-    virtual HRESULT __stdcall Seek(int64_t offset, uint32_t origin, uint64_t* new_pos) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -328,7 +328,7 @@ interface IIOComponent : public IComponent
 // 入力コンポーネントのインターフェイス
 interface IReaderComponent : public IIOComponent
 {
-    virtual HRESULT __stdcall Read(void* buffer, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall Read(void* buffer, size_t offset, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -336,7 +336,7 @@ interface IReaderComponent : public IIOComponent
 // 出力コンポーネントのインターフェイス
 interface IWriterComponent : public IIOComponent
 {
-    virtual HRESULT __stdcall Write(void* buffer, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall Write(void* buffer, size_t offset, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
