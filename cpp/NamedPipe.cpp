@@ -186,7 +186,7 @@ HRESULT __stdcall NamedPipe::Create
         GenerateUUIDStringW(buf, MAX_PATH);
         ::StringCchCopyW(pimpl->name, MAX_PATH, buf);
     }
-    console_outW(L"NAME: %s", pimpl->name);
+    console_outW(L"Name: %s", pimpl->name);
 
     // その他のデータをメンバ変数に記憶
     pimpl->data.max_instance = max_instance;

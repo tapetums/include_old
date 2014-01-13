@@ -1,8 +1,12 @@
 ﻿// Property.hpp
 
+#pragma once
+
 //---------------------------------------------------------------------------//
 
-extern const wchar_t* NAME;
+#include <Interfaces.hpp>
+
+//---------------------------------------------------------------------------//
 
 extern const CLSID CLSID_Component;
 
@@ -32,12 +36,18 @@ public:
     ULONG   __stdcall Release() override;
 
 public:
-    size_t __stdcall data_count()           const override;
-    IData* __stdcall data(size_t index = 0) const override;
+    IData* __stdcall at(size_t index = 0) const override;
+    size_t __stdcall size()               const override;
 
 private:
     struct Impl;
     Impl* pimpl;
+
+private:
+    Property(const Property&)             = delete;
+    Property(Property&&)                  = delete;
+    Property& operator =(const Property&) = delete;
+    Property& operator =(Property&&)      = delete;
 };
 
 //---------------------------------------------------------------------------//

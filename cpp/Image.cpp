@@ -8,10 +8,6 @@
 
 //---------------------------------------------------------------------------//
 
-#define NAME TEXT("Bitmap")
-
-//---------------------------------------------------------------------------//
-
 class CriticalSection
 {
 public:
@@ -111,27 +107,27 @@ struct Bitmap::Impl
 
 Bitmap::Bitmap()
 {
-    console_out(TEXT("%s::ctor begin"), NAME);
+    console_out(TEXT("%s::ctor begin"), TEXT(__FILE__));
 
     pimpl = new Impl;
 
     this->AddRef();
 
-    console_out(TEXT("%s::ctor end"), NAME);
+    console_out(TEXT("%s::ctor end"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
 
 Bitmap::~Bitmap()
 {
-    console_out(TEXT("%s::dtor begin"), NAME);
+    console_out(TEXT("%s::dtor begin"), TEXT(__FILE__));
 
     this->Dispose();
 
     delete pimpl;
     pimpl = nullptr;
 
-    console_out(TEXT("%s::dtor end"), NAME);
+    console_out(TEXT("%s::dtor end"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
@@ -141,7 +137,7 @@ HRESULT __stdcall Bitmap::QueryInterface
     REFIID riid, void** ppvObject
 )
 {
-    console_out(TEXT("%s::QueryInterface() begin"), NAME);
+    console_out(TEXT("%s::QueryInterface() begin"), TEXT(__FILE__));
 
     if ( nullptr == ppvObject )
     {
@@ -163,13 +159,13 @@ HRESULT __stdcall Bitmap::QueryInterface
     else
     {
         console_out(TEXT("No such an interface"));
-        console_out(TEXT("%s::QueryInterface() end"), NAME);
+        console_out(TEXT("%s::QueryInterface() end"), TEXT(__FILE__));
         return E_NOINTERFACE;
     }
 
     this->AddRef();
 
-    console_out(TEXT("%s::QueryInterface() end"), NAME);
+    console_out(TEXT("%s::QueryInterface() end"), TEXT(__FILE__));
 
     return S_OK;
 }
@@ -180,7 +176,7 @@ ULONG __stdcall Bitmap::AddRef()
 {
     LONG cRef = ::InterlockedIncrement(&m_cRef);
 
-    console_out(TEXT("%s::AddRef(): %d -> %d"), NAME, cRef - 1, cRef);
+    console_out(TEXT("%s::AddRef(): %d -> %d"), TEXT(__FILE__), cRef - 1, cRef);
 
     return static_cast<ULONG>(cRef);
 }
@@ -191,21 +187,21 @@ ULONG __stdcall Bitmap::Release()
 {
     if ( m_cRef < 1 )
     {
-        console_out(TEXT("%s::Release() %d"), NAME, m_cRef);
+        console_out(TEXT("%s::Release() %d"), TEXT(__FILE__), m_cRef);
         return m_cRef;
     }
 
     LONG cRef = ::InterlockedDecrement(&m_cRef);
 
-    console_out(TEXT("%s::Release(): %d -> %d"), NAME, cRef + 1, cRef);
+    console_out(TEXT("%s::Release(): %d -> %d"), TEXT(__FILE__), cRef + 1, cRef);
 
     if ( cRef == 0 )
     {
-        console_out(TEXT("%s::delete begin"), NAME);
+        console_out(TEXT("%s::delete begin"), TEXT(__FILE__));
         {
             delete this;
         }
-        console_out(TEXT("%s::delete end"), NAME);
+        console_out(TEXT("%s::delete end"), TEXT(__FILE__));
     }
 
     return static_cast<ULONG>(cRef);
@@ -271,12 +267,12 @@ uint8_t* __stdcall Bitmap::data()  const
 
 HRESULT __stdcall Bitmap::Create(const BITMAPINFO* bmpinfo)
 {
-    console_out(TEXT("%s::Create() begin"), NAME);
+    console_out(TEXT("%s::Create() begin"), TEXT(__FILE__));
 
     if ( nullptr == bmpinfo )
     {
         console_out(TEXT("BITMAPINFO* is null"));
-        console_out(TEXT("%s::Create() end"), NAME);
+        console_out(TEXT("%s::Create() end"), TEXT(__FILE__));
         return E_INVALIDARG;
     }
 
@@ -290,7 +286,7 @@ HRESULT __stdcall Bitmap::Create(const BITMAPINFO* bmpinfo)
     ::memcpy(pimpl->bmpinfo, bmpinfo, bmi_size);
     console_out(TEXT("Bitmap header size: %d bytes"), bmi_size);
 
-    console_out(TEXT("%s::Create() end"), NAME);
+    console_out(TEXT("%s::Create() end"), TEXT(__FILE__));
 
     return S_OK;
 }
@@ -299,7 +295,7 @@ HRESULT __stdcall Bitmap::Create(const BITMAPINFO* bmpinfo)
 
 HRESULT __stdcall Bitmap::Dispose()
 {
-    console_out(TEXT("%s::Dispose() begin"), NAME);
+    console_out(TEXT("%s::Dispose() begin"), TEXT(__FILE__));
 
     pimpl->width     = 0;
     pimpl->height    = 0;
@@ -319,7 +315,7 @@ HRESULT __stdcall Bitmap::Dispose()
         pimpl->bmpinfo = nullptr;
     }
 
-    console_out(TEXT("%s::Dispose() end"), NAME);
+    console_out(TEXT("%s::Dispose() end"), TEXT(__FILE__));
 
     return S_OK;
 }
@@ -328,7 +324,7 @@ HRESULT __stdcall Bitmap::Dispose()
 
 Image* __stdcall Bitmap::Clone()
 {
-    console_out(TEXT("%s::Clone() begin"), NAME);
+    console_out(TEXT("%s::Clone() begin"), TEXT(__FILE__));
 
     auto bitmap = new Bitmap;
 
@@ -342,7 +338,7 @@ Image* __stdcall Bitmap::Clone()
     }
     pimpl->cs.unlock();
 
-    console_out(TEXT("%s::Clone() end"), NAME);
+    console_out(TEXT("%s::Clone() end"), TEXT(__FILE__));
 
     return bitmap;
 }
@@ -351,7 +347,7 @@ Image* __stdcall Bitmap::Clone()
 
 HRESULT __stdcall Bitmap::Load(LPCWSTR filename)
 {
-    console_out(TEXT("%s::Load() begin"), NAME);
+    console_out(TEXT("%s::Load() begin"), TEXT(__FILE__));
     console_out(TEXT("%s"), filename);
 
     if ( pimpl->data )
@@ -367,8 +363,8 @@ HRESULT __stdcall Bitmap::Load(LPCWSTR filename)
     );
     if ( hFile == INVALID_HANDLE_VALUE )
     {
-        console_out(TEXT("CreateFile() failed"), NAME);
-        console_out(TEXT("%s::Load() end"), NAME);
+        console_out(TEXT("CreateFile() failed"), TEXT(__FILE__));
+        console_out(TEXT("%s::Load() end"), TEXT(__FILE__));
         return E_FAIL;
     }
 
@@ -416,7 +412,7 @@ CLOSE_FILE:
         ::CloseHandle(hFile);
     }
 
-    console_out(TEXT("%s::Load() end"), NAME);
+    console_out(TEXT("%s::Load() end"), TEXT(__FILE__));
 
     return hr;
 }
@@ -425,13 +421,13 @@ CLOSE_FILE:
 
 HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
 {
-    console_out(TEXT("%s::Save() begin"), NAME);
+    console_out(TEXT("%s::Save() begin"), TEXT(__FILE__));
     console_out(TEXT("%s"), filename);
 
     if ( nullptr == pimpl->data )
     {
         console_out(TEXT("No data to save"));
-        console_out(TEXT("%s::Save() end"), NAME);
+        console_out(TEXT("%s::Save() end"), TEXT(__FILE__));
         return S_FALSE;
     }
 
@@ -442,8 +438,8 @@ HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
     );
     if ( hFile == INVALID_HANDLE_VALUE )
     {
-        console_out(TEXT("CreateFile() failed"), NAME);
-        console_out(TEXT("%s::Save() end"), NAME);
+        console_out(TEXT("CreateFile() failed"), TEXT(__FILE__));
+        console_out(TEXT("%s::Save() end"), TEXT(__FILE__));
         return E_FAIL;
     }
 
@@ -485,7 +481,7 @@ HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
         ::CloseHandle(hFile);
     }
 
-    console_out(TEXT("%s::Save() end"), NAME);
+    console_out(TEXT("%s::Save() end"), TEXT(__FILE__));
 
     return hr;
 }
@@ -494,7 +490,7 @@ HRESULT __stdcall Bitmap::Save(LPCWSTR filename)
 
 HRESULT __stdcall Bitmap::UpsideDown()
 {
-    console_out(TEXT("%s::UpsideDown() begin"), NAME);
+    console_out(TEXT("%s::UpsideDown() begin"), TEXT(__FILE__));
 
     int32_t  height;
     int32_t  stride;
@@ -520,7 +516,7 @@ HRESULT __stdcall Bitmap::UpsideDown()
     }
     pimpl->cs.unlock();
 
-    console_out(TEXT("%s::UpsideDown() end"), NAME);
+    console_out(TEXT("%s::UpsideDown() end"), TEXT(__FILE__));
 
     return S_OK;
 }
@@ -529,7 +525,7 @@ HRESULT __stdcall Bitmap::UpsideDown()
 
 HRESULT __stdcall Bitmap::ToBGRA32()
 {
-    console_out(TEXT("%s::ToBGRA32() begin"), NAME);
+    console_out(TEXT("%s::ToBGRA32() begin"), TEXT(__FILE__));
 
     int32_t     height;
     int32_t     width;
@@ -588,7 +584,7 @@ HRESULT __stdcall Bitmap::ToBGRA32()
         {
             delete[] data;
             console_out(TEXT("Unsupported bit color"));
-            console_out(TEXT("%s::ToBGRA32() end"), NAME);
+            console_out(TEXT("%s::ToBGRA32() end"), TEXT(__FILE__));
             return E_FAIL;
         }
 
@@ -609,7 +605,7 @@ HRESULT __stdcall Bitmap::ToBGRA32()
 
     pimpl->ShowParameters();
 
-    console_out(TEXT("%s::ToBGRA32() end"), NAME);
+    console_out(TEXT("%s::ToBGRA32() end"), TEXT(__FILE__));
 
     return S_OK;
 }

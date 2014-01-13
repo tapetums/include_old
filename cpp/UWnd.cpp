@@ -411,8 +411,8 @@ HRESULT __stdcall UWnd::ToggleFullScreen()
     HRESULT hr;
     if ( m_is_fullscreen )
     {
-        const auto style = this->style() | WS_POPUP | WS_MINIMIZEBOX;
-        ::SetWindowLongPtr(m_hwnd, GWL_STYLE, (LONG_PTR)style);
+        m_style_old = this->style();
+        ::SetWindowLongPtr(m_hwnd, GWL_STYLE, (LONG_PTR)(WS_POPUP | WS_MINIMIZEBOX));
 
         DEVMODE dm = { };
         dm.dmSize       = sizeof(dm);
@@ -431,8 +431,7 @@ HRESULT __stdcall UWnd::ToggleFullScreen()
     }
     else
     {
-        const auto style = this->style() ^ WS_POPUP;
-        ::SetWindowLongPtr(m_hwnd, GWL_STYLE, (LONG_PTR)style);
+        ::SetWindowLongPtr(m_hwnd, GWL_STYLE, (LONG_PTR)m_style_old);
 
         ::SetWindowPos
         (

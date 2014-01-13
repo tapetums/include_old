@@ -35,7 +35,10 @@
 
 //---------------------------------------------------------------------------//
 
-thread_local size_t indent = 0;
+thread_local size_t     indent    = 0;
+thread_local DWORD      thread_id = 0;
+thread_local WORD       color     = 0;
+thread_local SYSTEMTIME st        = { };
 
 //---------------------------------------------------------------------------//
 
@@ -76,7 +79,7 @@ private:
             ::AllocConsole();
         }
 
-        hout = GetStdHandle(STD_OUTPUT_HANDLE);
+        hout = ::GetStdHandle(STD_OUTPUT_HANDLE);
     }
 
     ~ConsoleHolder()
@@ -86,28 +89,29 @@ private:
             ::CloseHandle(evt);
             evt = nullptr;
         }
-
         if ( hout )
         {
-            system("pause");
+            //::FreeConsole();
+            hout = nullptr;
         }
-
-        //::FreeConsole();
     }
 };
 
 //---------------------------------------------------------------------------//
 
-static inline void __stdcall get_params(SYSTEMTIME& st, DWORD& thread_id, WORD& color)
+static inline void __stdcall get_params()
 {
     ::GetLocalTime(&st);
 
-    thread_id = ::GetCurrentThreadId();
-
-    color = 0x0F & (thread_id >> 4);
-    if ( color == 0 )
+    if ( thread_id == 0 )
     {
-        color = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+        thread_id = ::GetCurrentThreadId();
+
+        color = 0x0F & (thread_id >> 4);
+        if ( color == 0 )
+        {
+            color = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+        }
     }
 }
 
@@ -118,22 +122,15 @@ void __stdcall console_outA(const char* format, ...)
     // コンソールウィンドウのインスタンスを取得
     auto console = ConsoleHolder::GetInstance();
 
-    DWORD cb_w = 0;
-    char spaces[BUFSIZE];
-    char buf[BUFSIZE];
+    DWORD cb_w;
+    thread_local char spaces[BUFSIZE];
+    thread_local char pre[BUFSIZE];
+    thread_local char buf[BUFSIZE];
 
     // インデントを下げる
     if ( strstr(format, " end") )
     {
-        if ( indent < 1 )
-        {
-            static const auto buf = "index < 1\n";
-            ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
-        }
-        else
-        {
-            --indent;
-        }
+        --indent;
     }
 
     // インデントを文字列に
@@ -146,29 +143,17 @@ void __stdcall console_outA(const char* format, ...)
     spaces[i*2] = '\0';
 
     // 各種情報を取得
-    SYSTEMTIME st;
-    DWORD      thread_id;
-    WORD       color;
-    get_params(st, thread_id, color);
+    get_params();
 
-    // 排他処理を開始
-    console->EnterSection();
-
-    // スレッドごとに色付けする
-    ::SetConsoleTextAttribute(console->hout, color);
-    ::WriteConsoleA(console->hout, "*", 1, &cb_w, nullptr);
-    ::SetConsoleTextAttribute(console->hout, white);
-    
     // 時刻を文字列に
     ::StringCchPrintfA
     (
-        buf, BUFSIZE,
-        "%04u %02d:%02d:%02d;%03d> %s",
+        pre, BUFSIZE,
+        "0x%04x %02u:%02u:%02u;%03u> %s",
         thread_id,
         st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
         spaces
     );
-    ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
 
     // 引数を文字列に
     va_list al;
@@ -177,10 +162,18 @@ void __stdcall console_outA(const char* format, ...)
         ::StringCchVPrintfA(buf, BUFSIZE, format, al);
     }
     va_end(al);
-    ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
-    ::WriteConsoleA(console->hout, "\n", 1, &cb_w, nullptr);
 
-    // 排他処理を終了
+    // 文字列の書き出し
+    console->EnterSection();
+    {
+        ::SetConsoleTextAttribute(console->hout, color);
+        ::WriteConsoleA(console->hout, "*", 1, &cb_w, nullptr);
+
+        ::SetConsoleTextAttribute(console->hout, white);
+        ::WriteConsoleA(console->hout, pre, ::lstrlenA(pre), &cb_w, nullptr);
+        ::WriteConsoleA(console->hout, buf, ::lstrlenA(buf), &cb_w, nullptr);
+        ::WriteConsoleA(console->hout, "\n", 1, &cb_w, nullptr);
+    }
     console->LeaveSection();
 
     // インデントを上げる
@@ -197,22 +190,15 @@ void __stdcall console_outW(const wchar_t* format, ...)
     // コンソールウィンドウのインスタンスを取得
     auto console = ConsoleHolder::GetInstance();
 
-    DWORD cb_w = 0;
-    wchar_t spaces[BUFSIZE];
-    wchar_t buf[BUFSIZE];
+    DWORD cb_w;
+    thread_local wchar_t spaces[BUFSIZE];
+    thread_local wchar_t pre[BUFSIZE];
+    thread_local wchar_t buf[BUFSIZE];
 
     // インデントを下げる
     if ( wcsstr(format, L" end") )
     {
-        if ( indent < 1 )
-        {
-            static const auto buf = L"index < 1\n";
-            ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
-        }
-        else
-        {
-            --indent;
-        }
+        --indent;
     }
 
     // インデントを文字列に
@@ -225,29 +211,17 @@ void __stdcall console_outW(const wchar_t* format, ...)
     spaces[i*2] = '\0';
 
     // 各種情報を取得
-    SYSTEMTIME st;
-    DWORD      thread_id;
-    WORD       color;
-    get_params(st, thread_id, color);
-
-    // 排他処理を開始
-    console->EnterSection();
-
-    // スレッドごとに色付けする
-    ::SetConsoleTextAttribute(console->hout, color);
-    ::WriteConsoleW(console->hout, L"*", 1, &cb_w, nullptr);
-    ::SetConsoleTextAttribute(console->hout, white);
+    get_params();
 
     // 時刻を文字列に
     ::StringCchPrintfW
     (
-        buf, BUFSIZE,
-        L"%04u %02d:%02d:%02d;%03d> %s",
+        pre, BUFSIZE,
+        L"0x%04x %02u:%02u:%02u;%03u> %s",
         thread_id,
         st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
         spaces
     );
-    ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
 
     // 引数を文字列に
     va_list al;
@@ -256,10 +230,18 @@ void __stdcall console_outW(const wchar_t* format, ...)
         ::StringCchVPrintfW(buf, BUFSIZE, format, al);
     }
     va_end(al);
-    ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
-    ::WriteConsoleW(console->hout, L"\n", 1, &cb_w, nullptr);
 
-    // 排他処理を終了
+    // 文字列の書き出し
+    console->EnterSection();
+    {
+        ::SetConsoleTextAttribute(console->hout, color);
+        ::WriteConsoleW(console->hout, L"*", 1, &cb_w, nullptr);
+
+        ::SetConsoleTextAttribute(console->hout, white);
+        ::WriteConsoleW(console->hout, pre, ::lstrlenW(pre), &cb_w, nullptr);
+        ::WriteConsoleW(console->hout, buf, ::lstrlenW(buf), &cb_w, nullptr);
+        ::WriteConsoleW(console->hout, L"\n", 1, &cb_w, nullptr);
+    }
     console->LeaveSection();
 
     // インデントを上げる

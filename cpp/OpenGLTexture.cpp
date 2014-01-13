@@ -19,10 +19,6 @@
 
 //---------------------------------------------------------------------------//
 
-#define NAME TEXT("OpenGLTexture")
-
-//---------------------------------------------------------------------------//
-
 #ifdef THIS
 #undef THIS
 #endif
@@ -33,18 +29,18 @@
 
 OpenGLTexture::THIS()
 {
-    console_out(TEXT("%s::ctor"), NAME);
+    console_out(TEXT("%s::ctor"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
 
 OpenGLTexture::~THIS()
 {
-    console_out(TEXT("%s::dtor begin"), NAME);
+    console_out(TEXT("%s::dtor begin"), TEXT(__FILE__));
 
     this->Dispose();
 
-    console_out(TEXT("%s::dtor end"), NAME);
+    console_out(TEXT("%s::dtor end"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
@@ -54,7 +50,7 @@ HRESULT __stdcall OpenGLTexture::QueryInterface
     REFIID riid, void** ppvObject
 )
 {
-    console_out(TEXT("%s::QueryInterface() begin"), NAME);
+    console_out(TEXT("%s::QueryInterface() begin"), TEXT(__FILE__));
 
     if ( nullptr == ppvObject )
     {
@@ -76,13 +72,13 @@ HRESULT __stdcall OpenGLTexture::QueryInterface
     else
     {
         console_out(TEXT("No such an interface"));
-        console_out(TEXT("%s::QueryInterface() end"), NAME);
+        console_out(TEXT("%s::QueryInterface() end"), TEXT(__FILE__));
         return E_NOINTERFACE;
     }
 
     this->AddRef();
 
-    console_out(TEXT("%s::QueryInterface() end"), NAME);
+    console_out(TEXT("%s::QueryInterface() end"), TEXT(__FILE__));
 
     return S_OK;
 }
@@ -93,7 +89,7 @@ ULONG __stdcall OpenGLTexture::AddRef()
 {
     LONG cRef = ::InterlockedIncrement(&m_cRef);
 
-    console_out(TEXT("%s::AddRef(): %d -> %d"), NAME, cRef - 1, cRef);
+    console_out(TEXT("%s::AddRef(): %d -> %d"), TEXT(__FILE__), cRef - 1, cRef);
 
     return static_cast<ULONG>(cRef);
 }
@@ -104,21 +100,21 @@ ULONG __stdcall OpenGLTexture::Release()
 {
     if ( m_cRef < 1 )
     {
-        console_out(TEXT("%s::Release() %d"), NAME, m_cRef);
+        console_out(TEXT("%s::Release() %d"), TEXT(__FILE__), m_cRef);
         return m_cRef;
     }
 
     LONG cRef = ::InterlockedDecrement(&m_cRef);
 
-    console_out(TEXT("%s::Release(): %d -> %d"), NAME, cRef + 1, cRef);
+    console_out(TEXT("%s::Release(): %d -> %d"), TEXT(__FILE__), cRef + 1, cRef);
 
     if ( cRef == 0 )
     {
-        console_out(TEXT("%s::delete begin"), NAME);
+        console_out(TEXT("%s::delete begin"), TEXT(__FILE__));
         {
             delete this;
         }
-        console_out(TEXT("%s::delete end"), NAME);
+        console_out(TEXT("%s::delete end"), TEXT(__FILE__));
     }
 
     return static_cast<ULONG>(cRef);
@@ -159,7 +155,7 @@ HRESULT __stdcall OpenGLTexture::Create
     const TextureDesc* desc, size_t buf_size, const void* buffer
 )
 {
-    console_out(TEXT("%s::Create() begin"), NAME);
+    console_out(TEXT("%s::Create() begin"), TEXT(__FILE__));
 
     m_desc     = *desc;
     m_buf_size = buf_size;
@@ -245,7 +241,7 @@ HRESULT __stdcall OpenGLTexture::Create
         hr = S_OK;
     }
 
-    console_out(TEXT("%s::Create() end"), NAME);
+    console_out(TEXT("%s::Create() end"), TEXT(__FILE__));
 
     return hr;
 }
@@ -254,7 +250,7 @@ HRESULT __stdcall OpenGLTexture::Create
 
 HRESULT __stdcall OpenGLTexture::Dispose()
 {
-    console_out(TEXT("%s::Dispose() begin"), NAME);
+    console_out(TEXT("%s::Dispose() begin"), TEXT(__FILE__));
 
     if ( m_instance != 0 )
     {
@@ -272,7 +268,7 @@ HRESULT __stdcall OpenGLTexture::Dispose()
 
     ::ZeroMemory(&m_desc, sizeof(m_desc));
 
-    console_out(TEXT("%s::Dispose() end"), NAME);
+    console_out(TEXT("%s::Dispose() end"), TEXT(__FILE__));
 
     return S_OK;
 }

@@ -68,6 +68,7 @@ protected:
     HWND    m_hwnd          = nullptr;
     LPCTSTR m_classname     = nullptr;
     bool    m_is_fullscreen = false;
+    DWORD   m_style_old     = 0;
     RECT    m_win_rect;
 
 private:

@@ -2,8 +2,6 @@
 
 #pragma once
 
-#pragma execution_character_set("utf-8") 
-
 //---------------------------------------------------------------------------//
 //
 // CubeMelon コンポーネント API ヘッダー
@@ -94,24 +92,30 @@ interface IWriterComponent;
 
 //---------------------------------------------------------------------------//
 //
-// 文字列定数
+// 文字列定数 (encoding = UTF-8)
 //
 //---------------------------------------------------------------------------//
 
 // NotifyMessage()メッソドで使われる主なメッセージ
 static U8CSTR MSG_NULL = nullptr;
 
-static U8CSTR MSG_COMP_START_DONE   = (U8CSTR)"Comp.Start.Done";
-static U8CSTR MSG_COMP_START_FAILED = (U8CSTR)"Comp.Start.Failed";
-static U8CSTR MSG_COMP_STOP_DONE    = (U8CSTR)"Comp.Stop.Done";
-static U8CSTR MSG_COMP_STOP_FAILED  = (U8CSTR)"Comp.Stop.Failed";
+static U8CSTR MSG_START_ASYNC  = (U8CSTR)"Comp.Start.Async";
+static U8CSTR MSG_START_DONE   = (U8CSTR)"Comp.Start.Done";
+static U8CSTR MSG_START_FAILED = (U8CSTR)"Comp.Start.Failed";
+static U8CSTR MSG_STOP_ASYNC   = (U8CSTR)"Comp.Stop.Async";
+static U8CSTR MSG_STOP_DONE    = (U8CSTR)"Comp.Stop.Done";
+static U8CSTR MSG_STOP_FAILED  = (U8CSTR)"Comp.Stop.Failed";
 
+static U8CSTR MSG_IO_CLOSE_ASYNC    = (U8CSTR)"IO.Close.Async";
 static U8CSTR MSG_IO_CLOSE_DONE     = (U8CSTR)"IO.Close.Done";
 static U8CSTR MSG_IO_CLOSE_FAILED   = (U8CSTR)"IO.Close.Failed";
+static U8CSTR MSG_IO_OPEN_ASYNC     = (U8CSTR)"IO.Open.Async";
 static U8CSTR MSG_IO_OPEN_DONE      = (U8CSTR)"IO.Open.Done";
 static U8CSTR MSG_IO_OPEN_FAILED    = (U8CSTR)"IO.Open.Failed";
+static U8CSTR MSG_IO_READ_ASYNC     = (U8CSTR)"IO.Read.Async";
 static U8CSTR MSG_IO_READ_DONE      = (U8CSTR)"IO.Read.Done";
 static U8CSTR MSG_IO_READ_FAILED    = (U8CSTR)"IO.Read.Failed";
+static U8CSTR MSG_IO_WRITE_ASYNC    = (U8CSTR)"IO.Write.Async";
 static U8CSTR MSG_IO_WRITE_DONE     = (U8CSTR)"IO.Write.Done";
 static U8CSTR MSG_IO_WRITE_FAILED   = (U8CSTR)"IO.Write.Failed";
 
@@ -147,14 +151,16 @@ enum class STATE : uint32_t
     UNKNOWN  = UINT32_MAX, // 未初期化
     IDLE     = 0,          // 停止中
     ACTIVE   = 1,          // 実行中
-    OPEN     = 1 << 1,     // 所有オブジェクトは開かれている
-    STARTING = 1 << 2,     // 開始処理中
-    STOPPING = 1 << 3,     // 終了処理中
-    CLOSING  = 1 << 4,     // 所有オブジェクトを閉じようとしている
-    OPENING  = 1 << 5,     // 所有オブジェクトを開こうとしている
-    SEEKING  = 1 << 6,     // 所有オブジェクトを走査中
-    READING  = 1 << 7,     // 所有オブジェクトからデータを読込中
-    WRITING  = 1 << 8,     // 所有オブジェクトにデータを書込中
+    OPEN     = 1 <<  1,    // 所有オブジェクトは開かれている
+
+    BUSY     = 1 <<  8,    // 処理中
+    STARTING = 1 <<  8,    // 開始処理中
+    STOPPING = 1 <<  9,    // 終了処理中
+    CLOSING  = 1 << 10,    // 所有オブジェクトを閉じようとしている
+    OPENING  = 1 << 11,    // 所有オブジェクトを開こうとしている
+    SEEKING  = 1 << 12,    // 所有オブジェクトを走査中
+    READING  = 1 << 13,    // 所有オブジェクトからデータを読込中
+    WRITING  = 1 << 14,    // 所有オブジェクトにデータを書込中
 };
 
 // 暗黙の変換がなされないので以下の演算子オーバーロードが必要
@@ -186,19 +192,9 @@ inline STATE& __stdcall operator ^=(STATE& lhs, const STATE& rhs)
 {
     lhs = lhs ^ rhs; return lhs;
 }
-inline bool __stdcall operator ==(const STATE& lhs, const STATE& rhs)
-{
-    return ((uint32_t)lhs == (uint32_t)rhs);
-}
-inline bool __stdcall operator !=(const STATE& lhs, const STATE& rhs)
-{
-    return ((uint32_t)lhs != (uint32_t)rhs);
-}
-
-//---------------------------------------------------------------------------//
 
 // コンポーネントの状態を調べるマクロ
-#define IS_COMP_BUSY(x) x ? (x->status() >= STATE::OPENING) : false
+#define IS_COMP_BUSY(comp) comp ? (comp->status() >= STATE::BUSY) : false
 
 //---------------------------------------------------------------------------//
 //
@@ -233,10 +229,10 @@ static const VerInfo API_VERSION { 1, 0, 0, 'a' };
 // 汎用データ格納オブジェクトのインターフェイス
 interface IData : public IUnknown
 {
-    virtual U8CSTR      __stdcall name()     const = 0;
-    virtual size_t      __stdcall size()     const = 0;
-    virtual uintptr_t   __stdcall get()      const = 0;
-    virtual HRESULT     __stdcall set(uintptr_t value) = 0;
+    virtual U8CSTR    __stdcall name() const = 0;
+    virtual uint64_t  __stdcall size() const = 0;
+    virtual uintptr_t __stdcall get()  const = 0;
+    virtual HRESULT   __stdcall set(uintptr_t value) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -244,8 +240,8 @@ interface IData : public IUnknown
 // 汎用データ格納オブジェクト集合のインターフェイス
 interface IDataArray : public IUnknown
 {
-    virtual size_t __stdcall data_count()           const = 0;
-    virtual IData* __stdcall data(size_t index = 0) const = 0;
+    virtual IData* __stdcall at(size_t index = 0) const = 0;
+    virtual size_t __stdcall size()               const = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -267,7 +263,7 @@ interface ICompAdapter : public IUnknown
     virtual HRESULT __stdcall Load(U8CSTR filepath, size_t index) = 0;
     virtual HRESULT __stdcall Free() = 0;
     virtual HRESULT __stdcall CreateInstance(IComponent* owner, REFIID riid, void** ppvObject) = 0;
-    virtual HRESULT __stdcall OpenConfiguration(HWND hwndParent, HWND* phwnd) = 0;
+    virtual HRESULT __stdcall OpenConfiguration(HWND hwndParent, HWND* phwnd = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -300,7 +296,8 @@ interface IComponent : public IUnknown
 
     virtual HRESULT __stdcall AttachMessage(U8CSTR msg, IComponent* listener) = 0;
     virtual HRESULT __stdcall DetachMessage(U8CSTR msg, IComponent* listener) = 0;
-    virtual HRESULT __stdcall NotifyMessage(U8CSTR msg, IComponent* sender, IComponent* listener, IData* data) = 0;
+    virtual HRESULT __stdcall NotifyMessage(U8CSTR msg, IComponent* sender = nullptr, IData* data = nullptr) = 0;
+    virtual HRESULT __stdcall OpenConfiguration(HWND hwndParent, HWND* phwnd = nullptr) = 0;
     virtual HRESULT __stdcall Start(void* args, IComponent* listener = nullptr) = 0;
     virtual HRESULT __stdcall Stop (void* args, IComponent* listener = nullptr) = 0;
 };
@@ -318,9 +315,9 @@ interface ICommandComponent : public IComponent
 // 入出力コンポーネントの基底インターフェイス
 interface IIOComponent : public IComponent
 {
-    virtual HRESULT __stdcall Close(IComponent* listener = nullptr) = 0;
-    virtual HRESULT __stdcall Open(U8CSTR path, U8CSTR format_as, IComponent* listener = nullptr) = 0;
     virtual HRESULT __stdcall QuerySupport(U8CSTR path, U8CSTR format_as) = 0;
+    virtual HRESULT __stdcall Open(U8CSTR path, U8CSTR format_as, IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall Close(IComponent* listener = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
