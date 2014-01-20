@@ -1,10 +1,10 @@
-// Wav.cpp
+Ôªø// Wav.cpp
 
 #pragma execution_character_set("utf-8") 
 
 //---------------------------------------------------------------------------//
 //
-// âπê∫ÉfÅ[É^ÉNÉâÉX
+// Èü≥Â£∞„Éá„Éº„Çø„ÇØ„É©„Çπ
 //   Copyright (C) 2013 tapetums
 //
 //---------------------------------------------------------------------------//
@@ -23,32 +23,6 @@
 //
 // Utility Function
 //
-//---------------------------------------------------------------------------//
-
-void __stdcall WriteFile64(HANDLE hFile, uint8_t* data, uint64_t data_size)
-{
-    DWORD cb_written;
-
-    for ( uint64_t pointer = 0; pointer < data_size; pointer += UINT32_MAX )
-    {
-        // 4,294,967,295 byte Ç∏Ç¬ èëÇ´èoÇµ
-        const auto size = (DWORD)min(UINT32_MAX, data_size - pointer);
-        ::WriteFile(hFile, data + pointer, size, &cb_written, nullptr);
-    }
-}
-
-//---------------------------------------------------------------------------//
-
-void __stdcall memcpy64(void* dst, void* src, uint64_t size)
-{
-    for ( uint64_t pointer = 0; pointer < size; pointer += SIZE_MAX )
-    {
-        // (SIZE_MAX) byte Ç∏Ç¬ èëÇ´èoÇµ
-        const auto size32 = (size_t)min(SIZE_MAX, size - pointer);
-        ::memcpy(dst, (uint8_t*)src + pointer, size32);
-    }
-}
-
 //---------------------------------------------------------------------------//
 
 uint32_t __stdcall MaskChannelMask(uint16_t channels)
@@ -86,6 +60,160 @@ uint32_t __stdcall MaskChannelMask(uint16_t channels)
             return 0;
         }
     }
+}
+
+//---------------------------------------------------------------------------//
+//
+// Internal Functions
+//
+//---------------------------------------------------------------------------//
+
+static void __stdcall WriteFile64(HANDLE hFile, uint8_t* data, uint64_t data_size)
+{
+    DWORD cb_written;
+
+    for ( uint64_t pointer = 0; pointer < data_size; pointer += UINT32_MAX )
+    {
+        // 4,294,967,295 byte „Åö„Å§ Êõ∏„ÅçÂá∫„Åó
+        const auto size = (DWORD)min(UINT32_MAX, data_size - pointer);
+        ::WriteFile(hFile, data + pointer, size, &cb_written, nullptr);
+    }
+}
+
+//---------------------------------------------------------------------------//
+
+static void __stdcall memcpy64(void* dst, void* src, uint64_t size)
+{
+    for ( uint64_t pointer = 0; pointer < size; pointer += SIZE_MAX )
+    {
+        // (SIZE_MAX) byte „Åö„Å§ Êõ∏„ÅçÂá∫„Åó
+        const auto size32 = (size_t)min(SIZE_MAX, size - pointer);
+        ::memcpy(dst, (uint8_t*)src + pointer, size32);
+    }
+}
+
+//---------------------------------------------------------------------------//
+
+static bool __stdcall ReadHeader(uint8_t* p)
+{
+    char     chunkId[4];
+    uint32_t chunkSize;
+    char     riffType[4];
+
+    memcpy(chunkId,    p,     sizeof(chunkId));
+    memcpy(&chunkSize, p + 4, sizeof(chunkSize));
+    memcpy(riffType,   p + 8, sizeof(riffType));
+    console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId[0], chunkId[1], chunkId[2], chunkId[3]);
+    console_out(TEXT("Chunk size: %d bytes"), chunkSize);
+    console_out(TEXT("RIFF type:  '%c%c%c%c'"), riffType[0], riffType[1], riffType[2], riffType[3]);
+
+    if ( 0 == ::memcmp(chunkId, chunkId_RF64, sizeof(chunkId)) )
+    {
+        if ( chunkSize != UINT32_MAX )
+        {
+            console_out(TEXT("Invalid chunk size as RF64 format"));
+            return false;
+        }
+    }
+    else if ( ::memcmp(chunkId, chunkId_RIFF, sizeof(chunkId)) )
+    {
+        console_out(TEXT("Not RIFF nor RF64"));
+        return false;
+    }
+    if ( ::memcmp(riffType, riffType_WAVE, sizeof(riffType)) )
+    {
+        console_out(TEXT("Not WAVE"));
+        return false;
+    }
+
+    return true;
+}
+
+//---------------------------------------------------------------------------//
+
+static void _stdcall ReadFormatChunk
+(
+    uint8_t* p, WAVEFORMATEXTENSIBLE* format
+)
+{
+    WORD tag = WAVE_FORMAT_UNKNOWN;
+    memcpy(&tag, p, sizeof(tag));
+    console_out(TEXT("wFormatTag: %d"), tag);
+
+    if ( tag == WAVE_FORMAT_PCM || tag == WAVE_FORMAT_IEEE_FLOAT )
+    {
+        memcpy(format, p, sizeof(PCMWAVEFORMAT));
+    }
+    else if ( tag == WAVE_FORMAT_EXTENSIBLE )
+    {
+        memcpy(format, p, sizeof(WAVEFORMATEXTENSIBLE));
+    }
+    else
+    {
+        console_out(TEXT("UNKNOWN FORMAT"));
+    }
+    console_out(TEXT("%6d Hz"),   format->Format.nSamplesPerSec);
+    console_out(TEXT("%6d bits"), format->Format.wBitsPerSample);
+    console_out(TEXT("%6d bits"), format->Samples.wValidBitsPerSample);
+    console_out(TEXT("%6d ch"),   format->Format.nChannels);
+}
+
+//---------------------------------------------------------------------------//
+
+static void __stdcall WriteHeader
+(
+    HANDLE hFile, uint64_t dataSize
+)
+{
+    DWORD    cb_written;
+    uint32_t chunkSize;
+
+    if ( dataSize < UINT32_MAX )
+    {
+        chunkSize = sizeof(RiffChunk) + sizeof(WAVEFORMATEXTENSIBLE) + (uint32_t)dataSize;
+        ::WriteFile(hFile, chunkId_RIFF,  sizeof(chunkId_RIFF),  &cb_written, nullptr);
+        console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId_RIFF[0], chunkId_RIFF[1], chunkId_RIFF[2], chunkId_RIFF[3]);
+    }
+    else
+    {
+        chunkSize = UINT32_MAX;
+        ::WriteFile(hFile, chunkId_RF64,  sizeof(chunkId_RF64),  &cb_written, nullptr);
+        console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId_RF64[0], chunkId_RF64[1], chunkId_RF64[2], chunkId_RF64[3]);
+    }
+
+    ::WriteFile(hFile, &chunkSize,    sizeof(chunkSize),     &cb_written, nullptr);
+    ::WriteFile(hFile, riffType_WAVE, sizeof(riffType_WAVE), &cb_written, nullptr);
+    console_out(TEXT("Chunk size: %d bytes"), chunkSize);
+    console_out(TEXT("RIFF type:  '%c%c%c%c'"), riffType_WAVE[0], riffType_WAVE[1], riffType_WAVE[2], riffType_WAVE[3]);
+}
+
+//---------------------------------------------------------------------------//
+
+static void __stdcall WriteFormatChunk
+(
+    HANDLE hFile, const WAVEFORMATEXTENSIBLE* format
+)
+{
+    static const uint32_t chunkSize = sizeof(WAVEFORMATEXTENSIBLE);
+    DWORD cb_written;
+
+    ::WriteFile(hFile, chunkId_fmt, sizeof(chunkId_fmt), &cb_written, nullptr);
+    ::WriteFile(hFile, &chunkSize,  sizeof(chunkSize),   &cb_written, nullptr);
+    ::WriteFile(hFile, format,      chunkSize,           &cb_written, nullptr);
+}
+
+//---------------------------------------------------------------------------//
+
+static void __stdcall WriteChunk
+(
+    HANDLE hFile, const char chunkId[4], uint32_t chunkSize, uint8_t* chunkData
+)
+{
+    DWORD cb_written;
+
+    ::WriteFile(hFile, chunkId,    4 * sizeof(char),  &cb_written, nullptr);
+    ::WriteFile(hFile, &chunkSize, sizeof(chunkSize), &cb_written, nullptr);
+    ::WriteFile(hFile, chunkData,  chunkSize,         &cb_written, nullptr);
 }
 
 //---------------------------------------------------------------------------//
@@ -129,9 +257,16 @@ struct Wav::Impl
     ~Impl();
 
     void     __stdcall Init();
-    bool     __stdcall ReadChunks ();
-    bool     __stdcall WriteChunks(HANDLE hFile);
-    uint64_t __stdcall LookUpSizeTable(const char* chunkId);
+
+    bool     __stdcall ReadAllChunks();
+    void     __stdcall ReadDataSize64Chunk(uint8_t* p, uint32_t chunkSize);
+
+    bool     __stdcall WriteAllChunks(HANDLE hFile);
+    void     __stdcall WriteDataSize64Chunk(HANDLE hFile, uint32_t chunkSize);
+    void     __stdcall WriteChunk64(HANDLE hFile, const char chunkId[4], uint8_t* chunkData);
+
+    uint8_t* __stdcall ForwardPointer(uint8_t* p, const char chunkId[4], uint32_t chunkSize);
+    uint64_t __stdcall LookUpSizeTable(const char chunkId[4]);
 };
 
 //---------------------------------------------------------------------------//
@@ -178,7 +313,7 @@ void __stdcall Wav::Impl::Init()
 
 //---------------------------------------------------------------------------//
 
-bool __stdcall Wav::Impl::ReadChunks()
+bool __stdcall Wav::Impl::ReadAllChunks()
 {
     if ( riff_size < sizeof(RiffChunk) )
     {
@@ -188,99 +323,38 @@ bool __stdcall Wav::Impl::ReadChunks()
 
     auto p = pView;
 
+    // RIFF„ÉÅ„É£„É≥„ÇØ„ÅÆË™≠„ÅøËæº„Åø
+    const auto ret = ReadHeader(p);
+    if ( false == ret )
+    {
+        return ret;
+    }
+    p = p + sizeof(RiffChunk);
+
     char     chunkId[4];
     uint32_t chunkSize;
-    char     riffType[4];
 
-    // RIFFÉ`ÉÉÉìÉNÇÃì«Ç›çûÇ›
-    memcpy(chunkId,    p,     sizeof(chunkId));
-    memcpy(&chunkSize, p + 4, sizeof(chunkSize));
-    memcpy(riffType,   p + 8, sizeof(riffType));
-    console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId[0], chunkId[1], chunkId[2], chunkId[3]);
-    console_out(TEXT("Chunk size: %d bytes"), chunkSize);
-    console_out(TEXT("RIFF type:  '%c%c%c%c'"), riffType[0], riffType[1], riffType[2], riffType[3]);
-    if ( 0 == ::memcmp(chunkId, chunkId_RF64, sizeof(chunkId)) )
-    {
-        if ( chunkSize != UINT32_MAX )
-        {
-            console_out(TEXT("Invalid chunk size as RF64 format"));
-            return false;
-        }
-    }
-    else if ( ::memcmp(chunkId, chunkId_RIFF, sizeof(chunkId)) )
-    {
-        console_out(TEXT("Not RIFF nor RF64"));
-        return false;
-    }
-    if ( ::memcmp(riffType, riffType_WAVE, sizeof(riffType)) )
-    {
-        console_out(TEXT("Not WAVE"));
-    }
-    p = p + sizeof(chunkId) + sizeof(chunkSize) + sizeof(riffType);
-
-    // RIFFÉTÉuÉ`ÉÉÉìÉNÇÃì«Ç›çûÇ›
+    // RIFF„Çµ„Éñ„ÉÅ„É£„É≥„ÇØ„ÅÆË™≠„ÅøËæº„Åø
     while ( p < pView + riff_size )
     {
         console_out(TEXT("Reading chunk begin"));
 
-        // É`ÉÉÉìÉNIDÇÃì«Ç›çûÇ›
+        // „ÉÅ„É£„É≥„ÇØID„ÅÆË™≠„ÅøËæº„Åø
         ::memcpy(chunkId,    p,     sizeof(chunkId));
         ::memcpy(&chunkSize, p + 4, sizeof(chunkSize));
         console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId[0], chunkId[1], chunkId[2], chunkId[3]);
         console_out(TEXT("Chunk size: %d bytes"), chunkSize);
 
-        // É`ÉÉÉìÉNÉfÅ[É^ÇÃì«Ç›çûÇ›
+        // „ÉÅ„É£„É≥„ÇØ„Éá„Éº„Çø„ÅÆË™≠„ÅøËæº„Åø
         if ( 0 == ::memcmp(chunkId, chunkId_ds64, sizeof(chunkId)) )
         {
             // 'ds64' chunk
-            if ( chunkSize > sizeof(DataSize64Chunk) )
-            {
-                // É`ÉÉÉìÉNÉTÉCÉYèÓïÒÇ™äiî[Ç≥ÇÍÇƒÇ¢ÇÈÇ∆Ç´
-                DataSize64Chunk chunk;
-                ::memcpy(&chunk, p, sizeof(chunk));
-                riff_size    = chunk.riffSize;
-                data_size    = chunk.dataSize;
-                sample_count = chunk.sampleCount;
-                table_length = chunk.tableLength;
-
-                table_ds64 = new ChunkSize64[table_length];
-                ::memcpy(table_ds64, p + sizeof(DataSize64Chunk), table_length * sizeof(ChunkSize64));
-            }
-            else
-            {
-                // ç≈è¨å¿ÇÃèÓïÒÇµÇ©äiî[Ç≥ÇÍÇƒÇ¢Ç»Ç¢Ç∆Ç´
-                DataSize64ChunkLight chunk;
-                ::memcpy(&chunk, p, sizeof(chunk));
-                riff_size = chunk.riffSize;
-                data_size = chunk.dataSize;
-            }
-            console_out(TEXT("RIFF size: %d"), riff_size);
-            console_out(TEXT("Data size: %d"), data_size);
+            ReadDataSize64Chunk(p + 8, chunkSize);
         }
         else if ( 0 == ::memcmp(chunkId, chunkId_fmt, sizeof(chunkId)) )
         {
             // 'fmt ' chunk
-            WORD tag = WAVE_FORMAT_UNKNOWN;
-            memcpy(&tag, p + 8, sizeof(tag));
-            console_out(TEXT("wFormatTag: %d"), tag);
-
-            // ÉtÉHÅ[É}ÉbÉgèÓïÒÇÃì«Ç›çûÇ›
-            if ( tag == WAVE_FORMAT_PCM || tag == WAVE_FORMAT_IEEE_FLOAT )
-            {
-                memcpy(&format, p + 8, sizeof(PCMWAVEFORMAT));
-            }
-            else if ( tag == WAVE_FORMAT_EXTENSIBLE )
-            {
-                memcpy(&format, p + 8, sizeof(WAVEFORMATEXTENSIBLE));
-            }
-            else
-            {
-                console_out(TEXT("UNKNOWN FORMAT"));
-            }
-            console_out(TEXT("%6d Hz"),   format.Format.nSamplesPerSec);
-            console_out(TEXT("%6d bits"), format.Format.wBitsPerSample);
-            console_out(TEXT("%6d bits"), format.Samples.wValidBitsPerSample);
-            console_out(TEXT("%6d ch"),   format.Format.nChannels);
+            ReadFormatChunk(p + 8, &format);
         }
         else if ( 0 == strncmp(chunkId, chunkId_data, sizeof(chunkId)) )
         {
@@ -297,32 +371,11 @@ bool __stdcall Wav::Impl::ReadChunks()
             console_out(TEXT("Unknown chunk type"));
         }
 
-        // É|ÉCÉìÉ^ÇéüÇÃÉ`ÉÉÉìÉNÇ‹Ç≈êiÇﬂÇÈ
-        if ( 8 < chunkSize && chunkSize < UINT32_MAX )
+        // „Éù„Ç§„É≥„Çø„ÇíÊ¨°„ÅÆ„ÉÅ„É£„É≥„ÇØ„Åæ„ÅßÈÄ≤„ÇÅ„Çã
+        p = ForwardPointer(p, chunkId, chunkSize);
+        if ( nullptr == p )
         {
-            p = p + sizeof(chunkId) + sizeof(chunkSize) + chunkSize;
-        }
-        else
-        {
-            if ( 0 == strncmp(chunkId, chunkId_data, sizeof(chunkId)) )
-            {
-                p = p + sizeof(chunkId) + sizeof(chunkSize) + data_size;
-            }
-            else if ( table_ds64 )
-            {
-                const auto chunkSize64 = this->LookUpSizeTable(chunkId);
-                if ( chunkSize64 == 0 )
-                {
-                    console_out(TEXT("Size table look up error"));
-                    return false;
-                }
-                p = p + sizeof(chunkId) + sizeof(chunkSize) + chunkSize64;
-            }
-            else
-            {
-                console_out(TEXT("Size table look up error"));
-                return false;
-            }
+            return false;
         }
 
         console_out(TEXT("Reading chunk end"));
@@ -333,31 +386,99 @@ bool __stdcall Wav::Impl::ReadChunks()
 
 //---------------------------------------------------------------------------//
 
-bool __stdcall Wav::Impl::WriteChunks(HANDLE hFile)
+void _stdcall Wav::Impl::ReadDataSize64Chunk
+(
+    uint8_t* p, uint32_t chunkSize
+)
 {
-    auto p = pView + sizeof(RiffChunk);
-
-    DWORD    cb_written;
-    char     chunkId[4];
-    uint32_t chunkSize;
-
-    if ( data_size < UINT32_MAX )
+    if ( chunkSize > sizeof(DataSize64Chunk) )
     {
-        chunkSize = (uint32_t)data_size;
-        ::WriteFile(hFile, chunkId_RIFF,  sizeof(chunkId_RIFF),  &cb_written, nullptr);
-        console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId_RIFF[0], chunkId_RIFF[1], chunkId_RIFF[2], chunkId_RIFF[3]);
+        // „ÉÅ„É£„É≥„ÇØ„Çµ„Ç§„Ç∫ÊÉÖÂ†±„ÅåÊ†ºÁ¥ç„Åï„Çå„Å¶„ÅÑ„Çã„Å®„Åç
+        DataSize64Chunk chunk;
+        ::memcpy(&chunk, p, sizeof(chunk));
+        riff_size    = chunk.riffSize;
+        data_size    = chunk.dataSize;
+        sample_count = chunk.sampleCount;
+        table_length = chunk.tableLength;
+
+        table_ds64 = new ChunkSize64[table_length];
+        ::memcpy(table_ds64, p + sizeof(DataSize64Chunk), table_length * sizeof(ChunkSize64));
     }
     else
     {
-        chunkSize = UINT32_MAX;
-        ::WriteFile(hFile, chunkId_RF64,  sizeof(chunkId_RF64),  &cb_written, nullptr);
-        console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId_RF64[0], chunkId_RF64[1], chunkId_RF64[2], chunkId_RF64[3]);
+        // ÊúÄÂ∞èÈôê„ÅÆÊÉÖÂ†±„Åó„ÅãÊ†ºÁ¥ç„Åï„Çå„Å¶„ÅÑ„Å™„ÅÑ„Å®„Åç
+        DataSize64ChunkLight chunk;
+        ::memcpy(&chunk, p, sizeof(chunk));
+        riff_size = chunk.riffSize;
+        data_size = chunk.dataSize;
     }
-    ::WriteFile(hFile, &chunkSize,    sizeof(chunkSize),     &cb_written, nullptr);
-    ::WriteFile(hFile, riffType_WAVE, sizeof(riffType_WAVE), &cb_written, nullptr);
-    console_out(TEXT("Chunk size: %d bytes"), chunkSize);
-    console_out(TEXT("RIFF type:  '%c%c%c%c'"), riffType_WAVE[0], riffType_WAVE[1], riffType_WAVE[2], riffType_WAVE[3]);
+    console_out(TEXT("RIFF size: %d"), riff_size);
+    console_out(TEXT("Data size: %d"), data_size);
+}
 
+//---------------------------------------------------------------------------//
+
+void __stdcall Wav::Impl::WriteDataSize64Chunk
+(
+    HANDLE hFile, uint32_t chunkSize
+)
+{
+    DWORD cb_written;
+
+    ::WriteFile(hFile, chunkId_ds64, sizeof(chunkId_ds64), &cb_written, nullptr);
+    ::WriteFile(hFile, &chunkSize,   sizeof(chunkSize),    &cb_written, nullptr);
+
+    uint32_t table_size = table_length * sizeof(ChunkSize64);
+
+    chunkSize = sizeof(DataSize64Chunk) + table_size;
+    {
+        ::WriteFile(hFile, &riff_size,    sizeof(riff_size),    &cb_written, nullptr);
+        ::WriteFile(hFile, &data_size,    sizeof(data_size),    &cb_written, nullptr);
+        ::WriteFile(hFile, &sample_count, sizeof(sample_count), &cb_written, nullptr);
+        ::WriteFile(hFile, &table_length, sizeof(table_length), &cb_written, nullptr);
+        if ( table_ds64 )
+        {
+            ::WriteFile(hFile, table_ds64, table_size, &cb_written, nullptr);
+        }
+    }
+}
+
+//---------------------------------------------------------------------------//
+
+void __stdcall Wav::Impl::WriteChunk64
+(
+    HANDLE hFile, const char chunkId[4], uint8_t* chunkData
+)
+{
+    static const uint32_t chunkSize = UINT32_MAX;
+
+    DWORD cb_written;
+
+    ::WriteFile(hFile,    chunkId,  4 * sizeof(char), &cb_written, nullptr);
+    ::WriteFile(hFile, &chunkSize, sizeof(chunkSize), &cb_written, nullptr);
+
+    if ( 0 == strncmp(chunkId, chunkId_data, sizeof(chunkId)) )
+    {
+        WriteFile64(hFile, chunkData, data_size);
+    }
+    else if ( table_ds64 )
+    {
+        WriteFile64(hFile, chunkData, LookUpSizeTable(chunkId));
+    }
+    else
+    {
+        console_out(TEXT("Size table look up error"));
+    }
+}
+
+//---------------------------------------------------------------------------//
+
+bool __stdcall Wav::Impl::WriteAllChunks(HANDLE hFile)
+{
+    char     chunkId[4];
+    uint32_t chunkSize;
+
+    auto p = pView + sizeof(RiffChunk);
     while ( p < pView + riff_size )
     {
         console_out(TEXT("Writing chunk begin"));
@@ -367,84 +488,58 @@ bool __stdcall Wav::Impl::WriteChunks(HANDLE hFile)
         console_out(TEXT("Chunk Id:   '%c%c%c%c'"), chunkId[0], chunkId[1], chunkId[2], chunkId[3]);
         console_out(TEXT("Chunk size: %d bytes"), chunkSize);
 
-        ::WriteFile(hFile, chunkId,    sizeof(chunkId),   &cb_written, nullptr);
-        ::WriteFile(hFile, &chunkSize, sizeof(chunkSize), &cb_written, nullptr);
-
         if ( 0 == ::memcmp(chunkId, chunkId_ds64, sizeof(chunkId)) )
         {
-            uint32_t table_size = table_length * sizeof(ChunkSize64);
-
-            chunkSize = sizeof(DataSize64Chunk) + table_size;
-            {
-                ::WriteFile(hFile, &riff_size,    sizeof(riff_size),    &cb_written, nullptr);
-                ::WriteFile(hFile, &data_size,    sizeof(data_size),    &cb_written, nullptr);
-                ::WriteFile(hFile, &sample_count, sizeof(sample_count), &cb_written, nullptr);
-                ::WriteFile(hFile, &table_length, sizeof(table_length), &cb_written, nullptr);
-                if ( table_ds64 )
-                {
-                    ::WriteFile(hFile, table_ds64, table_size, &cb_written, nullptr);
-                }
-            }
+            WriteDataSize64Chunk(hFile, chunkSize);
         }
         else if ( chunkSize < UINT32_MAX )
         {
-            ::WriteFile(hFile, p + 8, chunkSize, &cb_written, nullptr);
+            WriteChunk(hFile, chunkId, chunkSize, p + 8);
         }
         else
         {
-            if ( 0 == strncmp(chunkId, chunkId_data, sizeof(chunkId)) )
-            {
-                WriteFile64(hFile, p + 8, data_size);
-            }
-            else if ( table_ds64 )
-            {
-                const auto chunkSize64 = this->LookUpSizeTable(chunkId);
-                if ( chunkSize64 == 0 )
-                {
-                    console_out(TEXT("Size table look up error"));
-                    return false;
-                }
-                WriteFile64(hFile, p + 8, chunkSize64);
-            }
-            else
-            {
-                console_out(TEXT("Size table look up error"));
-                return false;
-            }
+            WriteChunk64(hFile, chunkId, p + 8);
         }
 
-        // É|ÉCÉìÉ^ÇéüÇÃÉ`ÉÉÉìÉNÇ‹Ç≈êiÇﬂÇÈ
-        if ( 8 < chunkSize && chunkSize < UINT32_MAX )
+        p = ForwardPointer(p, chunkId, chunkSize);
+        if ( nullptr == p )
         {
-            p = p + sizeof(chunkId) + sizeof(chunkSize) + chunkSize;
-        }
-        else
-        {
-            if ( 0 == strncmp(chunkId, chunkId_data, sizeof(chunkId)) )
-            {
-                p = p + sizeof(chunkId) + sizeof(chunkSize) + data_size;
-            }
-            else if ( table_ds64 )
-            {
-                const auto chunkSize64 = this->LookUpSizeTable(chunkId);
-                if ( chunkSize64 == 0 )
-                {
-                    console_out(TEXT("Size table look up error"));
-                    return false;
-                }
-                p = p + sizeof(chunkId) + sizeof(chunkSize) + chunkSize64;
-            }
-            else
-            {
-                console_out(TEXT("Size table look up error"));
-                return false;
-            }
+            return false;
         }
 
         console_out(TEXT("Writing chunk end"));
     }
 
     return true;
+}
+
+//---------------------------------------------------------------------------//
+
+uint8_t* __stdcall Wav::Impl::ForwardPointer
+(
+    uint8_t* p, const char chunkId[4], uint32_t chunkSize
+)
+{
+    if ( 8 < chunkSize && chunkSize < UINT32_MAX )
+    {
+        return p + 4 * sizeof(char) + sizeof(chunkSize) + chunkSize;
+    }
+    else
+    {
+        if ( 0 == strncmp(chunkId, chunkId_data, sizeof(chunkId)) )
+        {
+            return p + 4 * sizeof(char) + sizeof(chunkSize) + data_size;
+        }
+        else if ( table_ds64 )
+        {
+            return p + 4 * sizeof(char) + sizeof(chunkSize) + LookUpSizeTable(chunkId);
+        }
+        else
+        {
+            console_out(TEXT("Size table look up error"));
+            return nullptr;
+        }
+    }
 }
 
 //---------------------------------------------------------------------------//
@@ -459,6 +554,7 @@ uint64_t __stdcall Wav::Impl::LookUpSizeTable(const char* chunkId)
             return chunk.chunkSize;
         }
     }
+
     return 0;
 }
 
@@ -640,7 +736,7 @@ HRESULT __stdcall Wav::Create
         pimpl->format.dwChannelMask = MaskChannelMask(format.Format.nChannels);
     }
 
-    // TODO: ÉÅÉÇÉäÉ}ÉbÉvÉhÉtÉ@ÉCÉãÇ…Ç∑ÇÈ
+    // TODO: „É°„É¢„É™„Éû„ÉÉ„Éó„Éâ„Éï„Ç°„Ç§„É´„Å´„Åô„Çã
     pimpl->data_size = data_size;
     pimpl->data = new uint8_t[data_size];
     console_out(TEXT("Data size: %u"), pimpl->data_size);
@@ -706,7 +802,7 @@ HRESULT __stdcall Wav::Load(LPCWSTR path)
 
     pimpl->cs.lock();
 
-    const auto ret = pimpl->ReadChunks();
+    const auto ret = pimpl->ReadAllChunks();
 
     pimpl->cs.unlock();
 
@@ -736,7 +832,7 @@ HRESULT __stdcall Wav::Save(LPCWSTR path)
 
     if ( ::PathFileExistsW(path) )
     {
-        auto ret = MessageBoxW(nullptr, L"è„èëÇ´ÇµÇ‹Ç∑Ç©ÅH", path, MB_YESNO | MB_ICONQUESTION);
+        auto ret = MessageBoxW(nullptr, L"‰∏äÊõ∏„Åç„Åó„Åæ„Åô„ÅãÔºü", path, MB_YESNO | MB_ICONQUESTION);
         if ( ret == IDNO )
         {
             console_out(TEXT("Canceled"));
@@ -745,17 +841,16 @@ HRESULT __stdcall Wav::Save(LPCWSTR path)
         }
     }
 
-    HRESULT hr;
+    HRESULT hr = E_FAIL;
 
     const auto hFile = ::CreateFileW
     (
         path, GENERIC_WRITE, FILE_SHARE_WRITE, nullptr,
         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr
     );
-    if ( INVALID_HANDLE_VALUE == pimpl->hFile )
+    if ( INVALID_HANDLE_VALUE == hFile )
     {
         console_out(TEXT("CreateFile() failed"), TEXT(__FILE__));
-        hr = E_FAIL;
         goto CLOSE;
     }
 
@@ -763,13 +858,27 @@ HRESULT __stdcall Wav::Save(LPCWSTR path)
 
     pimpl->cs.lock();
     {
-        if ( pimpl->hFile )
+        if ( pimpl->hFile != INVALID_HANDLE_VALUE )
         {
-            ret = pimpl->WriteChunks(hFile);
+            WriteHeader(hFile, pimpl->data_size);
+            ret = pimpl->WriteAllChunks(hFile);
         }
         else
         {
-            /// to be implemented
+            WriteHeader(hFile, pimpl->data_size);
+
+            if ( pimpl->data_size < UINT32_MAX )
+            {
+                WriteFormatChunk(hFile, &pimpl->format);
+                WriteChunk(hFile, chunkId_data, (uint32_t)(pimpl->data_size), pimpl->data);
+            }
+            else
+            {
+                // TODO:
+                // 'ds64' section should be saved in case
+                WriteFormatChunk(hFile, &pimpl->format);
+                pimpl->WriteChunk64(hFile, chunkId_data, pimpl->data);
+            }
         }
     }
     pimpl->cs.unlock();
@@ -856,7 +965,7 @@ IWav* __stdcall Wav::Clone()
         wav->pimpl->format = pimpl->format;
         wav->pimpl->data_size = pimpl->data_size;
 
-        // TODO: ÉÅÉÇÉäÉ}ÉbÉvÉhÉtÉ@ÉCÉãÇ…Ç∑ÇÈ
+        // TODO: „É°„É¢„É™„Éû„ÉÉ„Éó„Éâ„Éï„Ç°„Ç§„É´„Å´„Åô„Çã
         wav->pimpl->data = new uint8_t[pimpl->data_size];
         memcpy64(wav->pimpl->data, pimpl->data, pimpl->data_size);
     }
@@ -887,7 +996,7 @@ HRESULT __stdcall Wav::Dispose()
         ::CloseHandle(pimpl->hMap);
     }
 
-    // TODO: ÉÅÉÇÉäÉ}ÉbÉvÉhÉtÉ@ÉCÉãÇ…Ç∑ÇÈ
+    // TODO: „É°„É¢„É™„Éû„ÉÉ„Éó„Éâ„Éï„Ç°„Ç§„É´„Å´„Åô„Çã
     if ( pimpl->hFile != INVALID_HANDLE_VALUE )
     {
         ::CloseHandle(pimpl->hFile);

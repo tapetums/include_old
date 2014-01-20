@@ -51,7 +51,7 @@ public:
     virtual HRESULT __stdcall Move(INT32 x, INT32 y);
     virtual HRESULT __stdcall Refresh(BOOL bErase = FALSE);
     virtual HRESULT __stdcall Resize(INT32 w, INT32 h);
-    virtual HRESULT __stdcall Show();
+    virtual HRESULT __stdcall Show(INT32 nCmdShow = SW_SHOWNORMAL);
     virtual HRESULT __stdcall ToCenter();
     virtual HRESULT __stdcall ToggleFullScreen();
     virtual LRESULT __stdcall WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp);

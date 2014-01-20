@@ -334,9 +334,9 @@ HRESULT __stdcall UWnd::Resize(INT32 w, INT32 h)
 
 //---------------------------------------------------------------------------//
 
-HRESULT __stdcall UWnd::Show()
+HRESULT __stdcall UWnd::Show(INT32 nCmdShow)
 {
-    const auto ret = ::ShowWindowAsync(m_hwnd, SW_SHOWNORMAL);
+    const auto ret = ::ShowWindowAsync(m_hwnd, nCmdShow);
 
     return ret ? S_OK : E_FAIL;
 }
