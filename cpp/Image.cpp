@@ -141,7 +141,7 @@ HRESULT __stdcall Bitmap::QueryInterface
 
     if ( nullptr == ppvObject )
     {
-        return E_POINTER;
+        return E_INVALIDARG;
     }
 
     *ppvObject = nullptr;

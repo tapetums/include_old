@@ -245,7 +245,7 @@ HRESULT __stdcall NamedPipe::Open
     if ( FAILED(hr) )
     {
         console_out(TEXT("Start waiting until the pipes open"));
-        pimpl->thread_wait = std::thread([this, proceeder]() -> void
+        pimpl->thread_wait = std::thread([=]() -> void
         {
             WCHAR name_pipe_in[MAX_PATH];
             ::StringCchPrintfW

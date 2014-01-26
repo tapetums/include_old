@@ -156,7 +156,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="cpp\Application.cpp" />
-    <ClCompile Include="cpp\ComponentBase.cpp" />
     <ClCompile Include="cpp\DebugPrint.cpp" />
     <ClCompile Include="cpp\DWM.cpp" />
     <ClCompile Include="cpp\GenerateUUIDString.cpp" />

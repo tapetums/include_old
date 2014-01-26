@@ -5,7 +5,7 @@
 //---------------------------------------------------------------------------//
 //
 // 音声データクラス
-//   Copyright (C) 2013 tapetums
+//   Copyright (C) 2013-2014 tapetums
 //
 //---------------------------------------------------------------------------//
 
@@ -195,6 +195,7 @@ static void __stdcall WriteFormatChunk
 )
 {
     static const uint32_t chunkSize = sizeof(WAVEFORMATEXTENSIBLE);
+
     DWORD cb_written;
 
     ::WriteFile(hFile, chunkId_fmt, sizeof(chunkId_fmt), &cb_written, nullptr);
@@ -262,7 +263,7 @@ struct Wav::Impl
     void     __stdcall ReadDataSize64Chunk(uint8_t* p, uint32_t chunkSize);
 
     bool     __stdcall WriteAllChunks(HANDLE hFile);
-    void     __stdcall WriteDataSize64Chunk(HANDLE hFile, uint32_t chunkSize);
+    void     __stdcall WriteDataSize64Chunk(HANDLE hFile);
     void     __stdcall WriteChunk64(HANDLE hFile, const char chunkId[4], uint8_t* chunkData);
 
     uint8_t* __stdcall ForwardPointer(uint8_t* p, const char chunkId[4], uint32_t chunkSize);
@@ -420,26 +421,27 @@ void _stdcall Wav::Impl::ReadDataSize64Chunk
 
 void __stdcall Wav::Impl::WriteDataSize64Chunk
 (
-    HANDLE hFile, uint32_t chunkSize
+    HANDLE hFile
 )
 {
     DWORD cb_written;
 
-    ::WriteFile(hFile, chunkId_ds64, sizeof(chunkId_ds64), &cb_written, nullptr);
-    ::WriteFile(hFile, &chunkSize,   sizeof(chunkSize),    &cb_written, nullptr);
-
-    uint32_t table_size = table_length * sizeof(ChunkSize64);
-
-    chunkSize = sizeof(DataSize64Chunk) + table_size;
+    const uint32_t table_size = table_length * sizeof(ChunkSize64);
+    const uint32_t chunkSize  = sizeof(DataSize64Chunk) + table_size;
+    if ( riff_size == 0 )
     {
-        ::WriteFile(hFile, &riff_size,    sizeof(riff_size),    &cb_written, nullptr);
-        ::WriteFile(hFile, &data_size,    sizeof(data_size),    &cb_written, nullptr);
-        ::WriteFile(hFile, &sample_count, sizeof(sample_count), &cb_written, nullptr);
-        ::WriteFile(hFile, &table_length, sizeof(table_length), &cb_written, nullptr);
-        if ( table_ds64 )
-        {
-            ::WriteFile(hFile, table_ds64, table_size, &cb_written, nullptr);
-        }
+        riff_size = sizeof(RF64Chunk) + sizeof(WAVEFORMATEXTENSIBLE) + data_size;
+    }
+
+    ::WriteFile(hFile, chunkId_ds64,  sizeof(chunkId_ds64), &cb_written, nullptr);
+    ::WriteFile(hFile, &chunkSize,    sizeof(chunkSize),    &cb_written, nullptr);
+    ::WriteFile(hFile, &riff_size,    sizeof(riff_size),    &cb_written, nullptr);
+    ::WriteFile(hFile, &data_size,    sizeof(data_size),    &cb_written, nullptr);
+    ::WriteFile(hFile, &sample_count, sizeof(sample_count), &cb_written, nullptr);
+    ::WriteFile(hFile, &table_length, sizeof(table_length), &cb_written, nullptr);
+    if ( table_ds64 )
+    {
+        ::WriteFile(hFile, table_ds64, table_size, &cb_written, nullptr);
     }
 }
 
@@ -490,7 +492,7 @@ bool __stdcall Wav::Impl::WriteAllChunks(HANDLE hFile)
 
         if ( 0 == ::memcmp(chunkId, chunkId_ds64, sizeof(chunkId)) )
         {
-            WriteDataSize64Chunk(hFile, chunkSize);
+            WriteDataSize64Chunk(hFile);
         }
         else if ( chunkSize < UINT32_MAX )
         {
@@ -604,7 +606,7 @@ HRESULT __stdcall Wav::QueryInterface
 
     if ( nullptr == ppvObject )
     {
-        return E_POINTER;
+        return E_INVALIDARG;
     }
 
     *ppvObject = nullptr;
@@ -858,15 +860,19 @@ HRESULT __stdcall Wav::Save(LPCWSTR path)
 
     pimpl->cs.lock();
     {
+        WriteHeader(hFile, pimpl->data_size);
+        if ( pimpl->data_size < UINT32_MAX )
+        {
+            DataSize64Chunk junk { };
+            WriteChunk(hFile, chunkId_JUNK, sizeof(junk), (uint8_t*)&junk);
+        }
+
         if ( pimpl->hFile != INVALID_HANDLE_VALUE )
         {
-            WriteHeader(hFile, pimpl->data_size);
             ret = pimpl->WriteAllChunks(hFile);
         }
         else
         {
-            WriteHeader(hFile, pimpl->data_size);
-
             if ( pimpl->data_size < UINT32_MAX )
             {
                 WriteFormatChunk(hFile, &pimpl->format);
@@ -874,8 +880,7 @@ HRESULT __stdcall Wav::Save(LPCWSTR path)
             }
             else
             {
-                // TODO:
-                // 'ds64' section should be saved in case
+                pimpl->WriteDataSize64Chunk(hFile);
                 WriteFormatChunk(hFile, &pimpl->format);
                 pimpl->WriteChunk64(hFile, chunkId_data, pimpl->data);
             }

@@ -202,7 +202,7 @@ HRESULT __stdcall UWnd::Create
     HMENU   hMenu
 )
 {
-    console_out(TEXT("UWnd::Create(%s) begin"), m_classname);
+    console_out(TEXT("UWnd::Create(\"%s\") begin"), m_classname);
 
     // 二重生成防止!
     if ( m_hwnd )
@@ -232,7 +232,7 @@ HRESULT __stdcall UWnd::Create
         ::UpdateWindow(m_hwnd);
     }
 
-    console_out(TEXT("UWnd::Create(%s) end"), m_classname);
+    console_out(TEXT("UWnd::Create(\"%s\") end"), m_classname);
 
     return m_hwnd ? S_OK : E_FAIL;
 }

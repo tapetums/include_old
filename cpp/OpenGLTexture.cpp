@@ -54,7 +54,7 @@ HRESULT __stdcall OpenGLTexture::QueryInterface
 
     if ( nullptr == ppvObject )
     {
-        return E_POINTER;
+        return E_INVALIDARG;
     }
 
     *ppvObject = nullptr;

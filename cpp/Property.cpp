@@ -2,8 +2,9 @@
 
 #include <windows.h>
 
-#include <Interfaces.hpp>
-#include <Property.hpp>
+#include "Interfaces.hpp"
+
+#include "Property.hpp"
 
 //---------------------------------------------------------------------------//
 
@@ -15,7 +16,17 @@ namespace CubeMelon {
 
 //---------------------------------------------------------------------------//
 
-static const size_t PROPERTY_COUNT = 7;
+enum class PROPERTY : size_t
+{
+    API_VER,
+    CLSID,
+    COPYRIGHT,
+    DESCRIPTION,
+    NAME,
+    TYPE,
+    VERSION,
+    COUNT
+};
 
 //---------------------------------------------------------------------------//
 
@@ -25,7 +36,7 @@ struct PropData : public IData
     {
         if ( nullptr == ppvObject )
         {
-            return E_POINTER;
+            return E_INVALIDARG;
         }
 
         *ppvObject = nullptr;
@@ -117,7 +128,7 @@ struct Copyright : public PropData
 
     uintptr_t __stdcall get() const override
     {
-        return (uintptr_t)(U8CSTR)COPYRIGHT;
+        return (uintptr_t)COPYRIGHT;
     }
 };
 
@@ -137,7 +148,7 @@ struct Description : public PropData
 
     uintptr_t __stdcall get() const override
     {
-        return (uintptr_t)(U8CSTR)COMP_DESC;
+        return (uintptr_t)COMP_DESC;
     }
 };
 
@@ -157,7 +168,7 @@ struct Name : public PropData
 
     uintptr_t __stdcall get() const override
     {
-        return (uintptr_t)(U8CSTR)COMP_NAME;
+        return (uintptr_t)COMP_NAME;
     }
 };
 
@@ -177,7 +188,7 @@ struct Type : public PropData
 
     uintptr_t __stdcall get() const override
     {
-        return (uintptr_t)(COMPTYPE)COMP_TYPE;
+        return (uintptr_t)COMP_TYPE;
     }
 };
 
@@ -235,7 +246,7 @@ HRESULT __stdcall Property::QueryInterface(REFIID riid, void** ppvObject)
 {
     if ( nullptr == ppvObject )
     {
-        return E_POINTER;
+        return E_INVALIDARG;
     }
 
     *ppvObject = nullptr;
@@ -275,22 +286,29 @@ IData* __stdcall Property::at(size_t index) const
 {
     switch ( index )
     {
-        case  0: return &pimpl->apiver;
-        case  1: return &pimpl->clsid;
-        case  2: return &pimpl->copyright;
-        case  3: return &pimpl->description;
-        case  4: return &pimpl->name;
-        case  5: return &pimpl->type;
-        case  6: return &pimpl->version;
-        default: return nullptr;
+        case (size_t)PROPERTY::API_VER:     return &pimpl->apiver;
+        case (size_t)PROPERTY::CLSID:       return &pimpl->clsid;
+        case (size_t)PROPERTY::COPYRIGHT:   return &pimpl->copyright;
+        case (size_t)PROPERTY::DESCRIPTION: return &pimpl->description;
+        case (size_t)PROPERTY::NAME:        return &pimpl->name;
+        case (size_t)PROPERTY::TYPE:        return &pimpl->type;
+        case (size_t)PROPERTY::VERSION:     return &pimpl->version;
+        default:                            return nullptr;
     }
+}
+
+//---------------------------------------------------------------------------//
+
+U8CSTR __stdcall Property::name() const
+{
+    return COMP_NAME;
 }
 
 //---------------------------------------------------------------------------//
 
 size_t __stdcall Property::size() const
 {
-    return PROPERTY_COUNT;
+    return (size_t)PROPERTY::COUNT;
 }
 
 //---------------------------------------------------------------------------//

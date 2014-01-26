@@ -47,7 +47,7 @@ public:
     {
         if ( nullptr == ppvObject )
         {
-            return E_POINTER;
+            return E_INVALIDARG;
         }
 
         *ppvObject = nullptr;
@@ -91,6 +91,12 @@ public:
 protected:
     ULONG   m_cRef;
     char8_t m_name[MAX_DATA_NAME_LENGTH];
+
+private:
+    CData(const CData&)             = delete;
+    CData(CData&&)                  = delete;
+    CData& operator =(const CData&) = delete;
+    CData& operator =(CData&&)      = delete;
 };
 
 //---------------------------------------------------------------------------//
@@ -214,6 +220,71 @@ public:
 
 protected:
     T m_data;
+};
+
+//---------------------------------------------------------------------------//
+
+class CDataArray : public IDataArray
+{
+public:
+    CDataArray()
+    {
+    }
+
+    virtual ~CDataArray()
+    {
+    }
+
+public:
+    HRESULT __stdcall QueryInterface(REFIID riid, void** ppvObject)
+    {
+        if ( nullptr == ppvObject )
+        {
+            return E_INVALIDARG;
+        }
+
+        *ppvObject = nullptr;
+        if ( IsEqualIID(riid, IID_IUnknown) )
+        {
+            *ppvObject = static_cast<IUnknown*>(this);
+        }
+        else if ( IsEqualIID(riid, IID_IDataArray) )
+        {
+            *ppvObject = static_cast<IDataArray*>(this);
+        }
+        else
+        {
+            return E_NOINTERFACE;
+        }
+
+        this->AddRef();
+
+        return S_OK;
+    }
+
+    ULONG __stdcall AddRef() override
+    {
+        return ::InterlockedIncrement(&m_cRef);
+    }
+
+    ULONG __stdcall Release() override
+    {
+        auto cRef = ::InterlockedDecrement(&m_cRef);
+        if ( cRef == 0 )
+        {
+            delete this;
+        }
+        return cRef;
+    }
+
+protected:
+    ULONG m_cRef = 1;
+
+private:
+    CDataArray(const CDataArray&)             = delete;
+    CDataArray(CDataArray&&)                  = delete;
+    CDataArray& operator =(const CDataArray&) = delete;
+    CDataArray& operator =(CDataArray&&)      = delete;
 };
 
 //---------------------------------------------------------------------------//

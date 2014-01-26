@@ -37,6 +37,7 @@ public:
 
 public:
     IData* __stdcall at(size_t index = 0) const override;
+    U8CSTR __stdcall name()               const override;
     size_t __stdcall size()               const override;
 
 private:

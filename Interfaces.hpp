@@ -31,12 +31,6 @@ static const IID IID_IData =
 static const IID IID_IDataArray =
 { 0x704e6fe9, 0xb308, 0x4bdf, { 0xb4, 0xa1, 0xd6, 0xaf, 0x95, 0xeb, 0x60, 0xd5 } };
 
-static const IID IID_ICommand =
-{ 0xc057dee2, 0xe71a, 0x4bc8, { 0xae, 0x56, 0x75, 0xd4, 0x86, 0x82, 0xfc, 0x6a } };
-
-static const IID IID_ICommandArray =
-{ 0xcf0dc445, 0x0697, 0x4490, { 0x8f, 0xa7, 0xbb, 0x92, 0xe4, 0x3c, 0x18, 0xe7 } };
-
 static const IID IID_ICompAdapter =
 { 0x6036103d, 0xe3bd, 0x46ba, { 0xb9, 0xa8, 0x3f, 0xfd, 0xfd, 0x68, 0xd7, 0x23 } };
 
@@ -45,12 +39,6 @@ static const IID IID_ICompCollection =
 
 static const IID IID_IComponent =
 { 0xa35dc0c3, 0xac5f, 0x447a, { 0xa4, 0x60, 0x9c, 0x52, 0x17, 0x72, 0x05, 0x7c } };
-
-static const IID IID_IComponentHost =
-{ 0x203d34d8, 0x72f3, 0x4aa4, { 0x9f, 0xf6, 0x13, 0xc2, 0xbd, 0xb4, 0x33, 0xed } };
-
-static const IID IID_ICommandComponent =
-{ 0xdb8206c3, 0x3697, 0x4838, { 0x8d, 0xf5, 0xc9, 0x1d, 0x04, 0x97, 0x6f, 0x07 } };
 
 static const IID IID_IIOComponent =
 { 0xeefb9211, 0x0fa4, 0x4c0c, { 0x99, 0xd6, 0xc0, 0x0c, 0xc6, 0xc0, 0xe1, 0x01 } };
@@ -77,15 +65,11 @@ struct VerInfo;
 
 interface IData;
 interface IDataArray;
-interface ICommand;
-interface ICommandArray;
 
 interface ICompAdapter;
 interface ICompCollection;
 
 interface IComponent;
-interface IComponentHost;
-interface ICommandComponent;
 interface IIOComponent;
 interface IReaderComponent;
 interface IWriterComponent;
@@ -99,12 +83,12 @@ interface IWriterComponent;
 // NotifyMessage()メッソドで使われる主なメッセージ
 static U8CSTR MSG_NULL = nullptr;
 
-static U8CSTR MSG_START_ASYNC  = (U8CSTR)"Comp.Start.Async";
-static U8CSTR MSG_START_DONE   = (U8CSTR)"Comp.Start.Done";
-static U8CSTR MSG_START_FAILED = (U8CSTR)"Comp.Start.Failed";
-static U8CSTR MSG_STOP_ASYNC   = (U8CSTR)"Comp.Stop.Async";
-static U8CSTR MSG_STOP_DONE    = (U8CSTR)"Comp.Stop.Done";
-static U8CSTR MSG_STOP_FAILED  = (U8CSTR)"Comp.Stop.Failed";
+static U8CSTR MSG_START_ASYNC       = (U8CSTR)"Start.Async";
+static U8CSTR MSG_START_DONE        = (U8CSTR)"Start.Done";
+static U8CSTR MSG_START_FAILED      = (U8CSTR)"Start.Failed";
+static U8CSTR MSG_STOP_ASYNC        = (U8CSTR)"Stop.Async";
+static U8CSTR MSG_STOP_DONE         = (U8CSTR)"Stop.Done";
+static U8CSTR MSG_STOP_FAILED       = (U8CSTR)"Stop.Failed";
 
 static U8CSTR MSG_IO_CLOSE_ASYNC    = (U8CSTR)"IO.Close.Async";
 static U8CSTR MSG_IO_CLOSE_DONE     = (U8CSTR)"IO.Close.Done";
@@ -121,9 +105,20 @@ static U8CSTR MSG_IO_WRITE_FAILED   = (U8CSTR)"IO.Write.Failed";
 
 //---------------------------------------------------------------------------//
 
-// 言語
+// 言語 (ISO 639-1 / ISO 3166)
 static U8CSTR ja_JP = (U8CSTR)"ja-JP";
 static U8CSTR en_US = (U8CSTR)"en-US";
+static U8CSTR en_UK = (U8CSTR)"en-UK";
+static U8CSTR es_ES = (U8CSTR)"es-ES";
+static U8CSTR de_DE = (U8CSTR)"de-DE";
+static U8CSTR fr_FR = (U8CSTR)"fr-FR";
+static U8CSTR pt_PT = (U8CSTR)"pt-PT";
+static U8CSTR pt_BR = (U8CSTR)"pt-BR";
+static U8CSTR ru_RU = (U8CSTR)"ru-RU";
+static U8CSTR it_IT = (U8CSTR)"it-IT";
+static U8CSTR zh_CN = (U8CSTR)"zh-CN";
+static U8CSTR zh_TW = (U8CSTR)"zh-TW";
+static U8CSTR ko_KR = (U8CSTR)"ko-KR";
 
 //---------------------------------------------------------------------------//
 //
@@ -154,6 +149,7 @@ enum class STATE : uint32_t
     OPEN     = 1 <<  1,    // 所有オブジェクトは開かれている
 
     BUSY     = 1 <<  8,    // 処理中
+
     STARTING = 1 <<  8,    // 開始処理中
     STOPPING = 1 <<  9,    // 終了処理中
     CLOSING  = 1 << 10,    // 所有オブジェクトを閉じようとしている
@@ -241,6 +237,7 @@ interface IData : public IUnknown
 interface IDataArray : public IUnknown
 {
     virtual IData* __stdcall at(size_t index = 0) const = 0;
+    virtual U8CSTR __stdcall name()               const = 0;
     virtual size_t __stdcall size()               const = 0;
 };
 
@@ -304,14 +301,6 @@ interface IComponent : public IUnknown
 
 //---------------------------------------------------------------------------//
 
-// コマンドコンポーネントのインターフェイス
-interface ICommandComponent : public IComponent
-{
-    virtual HRESULT __stdcall Execute(void* args, IComponent* listener = nullptr) = 0;
-};
-
-//---------------------------------------------------------------------------//
-
 // 入出力コンポーネントの基底インターフェイス
 interface IIOComponent : public IComponent
 {
@@ -325,7 +314,11 @@ interface IIOComponent : public IComponent
 // 入力コンポーネントのインターフェイス
 interface IReaderComponent : public IIOComponent
 {
-    virtual HRESULT __stdcall Read(void* buffer, size_t offset, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall Read
+    (
+        void* buffer, size_t offset, size_t buf_size, size_t* cb_data,
+        IComponent* listener = nullptr
+    ) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -333,7 +326,11 @@ interface IReaderComponent : public IIOComponent
 // 出力コンポーネントのインターフェイス
 interface IWriterComponent : public IIOComponent
 {
-    virtual HRESULT __stdcall Write(void* buffer, size_t offset, size_t buf_size, size_t* cb_data, IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall Write
+    (
+        void* buffer, size_t offset, size_t buf_size, size_t* cb_data,
+        IComponent* listener = nullptr
+    ) = 0;
 };
 
 //---------------------------------------------------------------------------//

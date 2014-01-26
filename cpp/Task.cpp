@@ -217,12 +217,12 @@ bool __stdcall TaskWorker::Start()
     }
 
     // スレッドの開始
-    pimpl->thread = std::thread([this]()
+    pimpl->thread = std::thread([=]() -> void
     {
         pimpl->thread_id = ::GetCurrentThreadId();
         console_out(TEXT("Started @ 0x%08u"), pimpl->thread_id);
 
-        MSG msg = {};
+        MSG msg = { };
 
         pimpl->on_work = true;
 
