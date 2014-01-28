@@ -463,6 +463,7 @@ LRESULT __stdcall UWnd::WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp)
     {
         console_out(TEXT("UWnd::WndProc( WM_CLOSE ) begin"));
         {
+            console_out(TEXT("PostQuitMessage(0)"));
             ::PostQuitMessage(0);
         }
         console_out(TEXT("UWnd::WndProc( WM_CLOSE ) end"));

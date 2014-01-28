@@ -83,6 +83,11 @@ interface IWriterComponent;
 // NotifyMessage()メッソドで使われる主なメッセージ
 static U8CSTR MSG_NULL = nullptr;
 
+static U8CSTR MSG_SHOW_TEXT         = (U8CSTR)"ShowText";
+
+static U8CSTR MSG_PROP_CHANGING     = (U8CSTR)"Property.Changing";
+static U8CSTR MSG_PROP_CHANGED      = (U8CSTR)"Property.Changed";
+
 static U8CSTR MSG_START_ASYNC       = (U8CSTR)"Start.Async";
 static U8CSTR MSG_START_DONE        = (U8CSTR)"Start.Done";
 static U8CSTR MSG_START_FAILED      = (U8CSTR)"Start.Failed";
@@ -209,6 +214,14 @@ struct VerInfo
     char8_t stage;
 };
 
+// 通知データ
+struct NotifyData
+{
+    U8CSTR      msg;
+    IComponent* sender;
+    IData*      data;
+};
+
 #pragma pack(pop)
 
 //---------------------------------------------------------------------------//
@@ -275,7 +288,7 @@ interface ICompCollection : public IUnknown
 
     virtual HRESULT          __stdcall Append(U8CSTR path) = 0;
     virtual HRESULT          __stdcall Remove(U8CSTR path) = 0;
-    virtual ICompCollection* __stdcall Collect(const CollectIf comparison) = 0;
+    virtual ICompCollection* __stdcall Collect(CollectIf condition) = 0;
     virtual ICompAdapter*    __stdcall Find(REFCLSID rclsid) = 0;
 };
 
@@ -293,10 +306,10 @@ interface IComponent : public IUnknown
 
     virtual HRESULT __stdcall AttachMessage(U8CSTR msg, IComponent* listener) = 0;
     virtual HRESULT __stdcall DetachMessage(U8CSTR msg, IComponent* listener) = 0;
-    virtual HRESULT __stdcall NotifyMessage(U8CSTR msg, IComponent* sender = nullptr, IData* data = nullptr) = 0;
+    virtual HRESULT __stdcall NotifyMessage(U8CSTR msg, IComponent* sender, IData* data) = 0;
     virtual HRESULT __stdcall OpenConfiguration(HWND hwndParent, HWND* phwnd = nullptr) = 0;
-    virtual HRESULT __stdcall Start(void* args, IComponent* listener = nullptr) = 0;
-    virtual HRESULT __stdcall Stop (void* args, IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall Start(void* args = nullptr) = 0;
+    virtual HRESULT __stdcall Stop (void* args = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -304,9 +317,9 @@ interface IComponent : public IUnknown
 // 入出力コンポーネントの基底インターフェイス
 interface IIOComponent : public IComponent
 {
-    virtual HRESULT __stdcall QuerySupport(U8CSTR path, U8CSTR format_as) = 0;
-    virtual HRESULT __stdcall Open(U8CSTR path, U8CSTR format_as, IComponent* listener = nullptr) = 0;
-    virtual HRESULT __stdcall Close(IComponent* listener = nullptr) = 0;
+    virtual HRESULT __stdcall QuerySupport(IData* data) = 0;
+    virtual HRESULT __stdcall Open (void* args = nullptr) = 0;
+    virtual HRESULT __stdcall Close(void* args = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -314,11 +327,7 @@ interface IIOComponent : public IComponent
 // 入力コンポーネントのインターフェイス
 interface IReaderComponent : public IIOComponent
 {
-    virtual HRESULT __stdcall Read
-    (
-        void* buffer, size_t offset, size_t buf_size, size_t* cb_data,
-        IComponent* listener = nullptr
-    ) = 0;
+    virtual HRESULT __stdcall Read(size_t offset, void* buffer, size_t buf_size, size_t* cb_read = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -326,11 +335,7 @@ interface IReaderComponent : public IIOComponent
 // 出力コンポーネントのインターフェイス
 interface IWriterComponent : public IIOComponent
 {
-    virtual HRESULT __stdcall Write
-    (
-        void* buffer, size_t offset, size_t buf_size, size_t* cb_data,
-        IComponent* listener = nullptr
-    ) = 0;
+    virtual HRESULT __stdcall Write(size_t offset, void* buffer, size_t buf_size, size_t* cb_written = nullptr) = 0;
 };
 
 //---------------------------------------------------------------------------//

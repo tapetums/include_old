@@ -7,9 +7,9 @@
 #include <windows.h>
 #include <strsafe.h>
 
-#include <DebugPrint.hpp>
-#include <GenerateUUIDString.hpp>
-#include <Interfaces.hpp>
+#include "DebugPrint.hpp"
+#include "GenerateUUIDString.hpp"
+#include "Interfaces.hpp"
 
 //---------------------------------------------------------------------------//
 
