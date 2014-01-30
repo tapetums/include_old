@@ -5,7 +5,7 @@
 ///---------------------------------------------------------------------------//
 //
 // Susie プラグイン API 定義ファイル (in C++11)
-//   Copyright (C) 2013 tapetums
+//   Copyright (C) 2013-2014 tapetums
 //
 //---------------------------------------------------------------------------//
 //
@@ -284,7 +284,7 @@ static SUSIE_API SusieCallbackDummy(int32_t nNum,int32_t nDenom, intptr_t lData)
 class Susie
 {
 public:
-    Susie();
+    Susie(LPCTSTR path = nullptr);
     ~Susie();
 
 public:
@@ -292,11 +292,11 @@ public:
     Susie& operator= (Susie&& rhs);
 
 public:
-    LPCTSTR __stdcall SpiPath() const;
+    LPCTSTR __stdcall path() const;
 
 public:
-    bool __stdcall Load(LPCTSTR spi_path);
-    bool __stdcall Free();
+    HRESULT __stdcall Load(LPCTSTR path);
+    HRESULT __stdcall Free();
 
     SUSIE_API GetPluginInfo(int32_t infono, LPTSTR buf, int32_t buflen);
     SUSIE_API IsSupported(LPCTSTR filename, void* dw);
@@ -312,25 +312,8 @@ public:
     SUSIE_API ConfigurationDlg(HWND parent, SPI_FNC_CODE fnc);
 
 private:
-    TCHAR                m_spi_path[MAX_PATH];
-    HMODULE              m_module           = nullptr;
-    SPI_GetPluginInfoA   m_GetPluginInfoA   = nullptr;
-    SPI_GetPluginInfoW   m_GetPluginInfoW   = nullptr;
-    SPI_IsSupportedA     m_IsSupportedA     = nullptr;
-    SPI_IsSupportedW     m_IsSupportedW     = nullptr;
-    SPI_GetPictureInfoA  m_GetPictureInfoA  = nullptr;
-    SPI_GetPictureInfoW  m_GetPictureInfoW  = nullptr;
-    SPI_GetPictureA      m_GetPictureA      = nullptr;
-    SPI_GetPictureW      m_GetPictureW      = nullptr;
-    SPI_GetPreviewA      m_GetPreviewA      = nullptr;
-    SPI_GetPreviewW      m_GetPreviewW      = nullptr;
-    SPI_GetArchiveInfoA  m_GetArchiveInfoA  = nullptr;
-    SPI_GetArchiveInfoW  m_GetArchiveInfoW  = nullptr;
-    SPI_GetFileInfoA     m_GetFileInfoA     = nullptr;
-    SPI_GetFileInfoW     m_GetFileInfoW     = nullptr;
-    SPI_GetFileA         m_GetFileA         = nullptr;
-    SPI_GetFileW         m_GetFileW         = nullptr;
-    SPI_ConfigurationDlg m_ConfigurationDlg = nullptr;
+    struct Impl;
+    Impl* pimpl;
 
 private:
     Susie(const Susie& lhs)             = delete;
@@ -354,8 +337,6 @@ public:
     size_t __stdcall SpiCount()                                    const;
     Susie* __stdcall GetAt(size_t index)                           const;
     Susie* __stdcall QueryAvailableSpi(LPCTSTR filename, void* dw) const;
-
-private:
     struct Impl;
     Impl* pimpl;
 
@@ -364,6 +345,41 @@ private:
     SpiManager(SpiManager&&)                  = delete;
     SpiManager& operator= (const SpiManager&) = delete;
     SpiManager& operator= (SpiManager&&)      = delete;
+};
+
+//---------------------------------------------------------------------------//
+
+#include <Collection.hpp>
+
+typedef ICollection<void, Susie*, LPCTSTR, LPCTSTR> SusieCollectionBase;
+
+class SusieCollection : public SusieCollectionBase
+{
+public:
+public:
+    SusieCollection();
+    ~SusieCollection();
+
+public:
+    size_t __stdcall size()           const override;
+    Susie* __stdcall at(size_t index) const override;
+
+public:
+    HRESULT      __stdcall Append(LPCTSTR path) override;
+    HRESULT      __stdcall Remove(LPCTSTR path) override;
+    HRESULT      __stdcall Clear() override;
+    ICollection* __stdcall Collect(Condition condition) override;
+    Susie*       __stdcall Find(LPCTSTR path) override;
+
+private:
+    struct Impl;
+    Impl* pimpl;
+
+private:
+    SusieCollection(const SusieCollection&)             = delete;
+    SusieCollection(SusieCollection&&)                  = delete;
+    SusieCollection& operator= (const SusieCollection&) = delete;
+    SusieCollection& operator= (SusieCollection&&)      = delete;
 };
 
 //---------------------------------------------------------------------------//

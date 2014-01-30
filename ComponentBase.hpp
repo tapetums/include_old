@@ -32,6 +32,7 @@ namespace std { typedef basic_string<char8_t> u8string; }
 
 typedef ComPtr<CubeMelon::IComponent>                        ComponentPtr;
 typedef ComPtr<CubeMelon::IDataArray>                        DataArrayPtr;
+typedef ComPtr<CubeMelon::ICompAdapterCollection>            CollectionPtr;
 typedef std::unordered_multimap<std::u8string, ComponentPtr> MessageMap;
 typedef std::queue<CubeMelon::NotifyData>                    NotifyQueue;
 
@@ -56,10 +57,10 @@ template <class I> class ComponentBase : public I
 protected:
     ULONG m_cRef  = 0;
     STATE m_state = STATE::UNKNOWN;
-    bool  m_alive = true;
 
     ComponentPtr    m_owner;
     DataArrayPtr    m_property;
+    CollectionPtr   m_collection;
     MessageMap      m_msg_map;
 
     CriticalSection m_cs_notify;
@@ -67,10 +68,15 @@ protected:
     NotifyQueue     m_q_notify;
     std::thread     m_thread_notify;
 
+private:
+    bool m_alive = true;
+
 public:
     explicit ComponentBase(IUnknown* pUnkOuter = nullptr)
     {
         console_out(TEXT("%s::Base::ctor() begin"), NAME);
+
+        this->AddRef();
 
         if ( pUnkOuter )
         {
@@ -82,18 +88,19 @@ public:
             console_out(TEXT("%s::Base::GetOwnerInterface end"), NAME);
         }
 
-        this->AddRef();
-
         m_thread_notify = std::thread([=]()
         {
             // COMの初期化
             ::CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
-            // メインループ
+            // イベントの作成
             m_evt_notify = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
             // メインループ
-            this->NotifyMessageLoop();
+            this->DistributeMessageLoop();
+
+            // 通知し切れなかったデータを破棄
+            this->DiscardMessage();
 
             // イベントの破棄
             if ( m_evt_notify )
@@ -156,14 +163,9 @@ public:
     }
 
 public:
-    REFCLSID __stdcall clsid() const override
+    ICompAdapterCollection* __stdcall adapters() const override
     {
-        return CLSID_Component;
-    }
-
-    ICompCollection* __stdcall collection() const override
-    {
-        return m_owner ? m_owner->collection() : nullptr;
+        return m_collection.GetInterface();
     }
 
     U8CSTR __stdcall name() const override
@@ -179,6 +181,23 @@ public:
     IDataArray* __stdcall property() const override
     {
         return m_property.GetInterface();
+    }
+
+    REFCLSID __stdcall rclsid() const override
+    {
+        return CLSID_Component;
+    }
+
+    IComponent* __stdcall root() const override
+    {
+        IComponent* root = m_owner.GetInterface();
+
+        while ( root->owner() )
+        {
+            root = root->owner();
+        }
+
+        return root;
     }
 
     STATE __stdcall status() const override
@@ -200,29 +219,51 @@ public:
             console_out(TEXT("%s::Base::AttachMessage() end"), NAME);
             return E_INVALIDARG;
         }
+        if ( (uint32_t)(m_state & STATE::MESSAGING) )
+        {
+            console_out(TEXT("Now processing messeges"));
+            console_out(TEXT("%s::Base::AttachMessage() end"), NAME);
+            return E_FAIL;
+        }
 
         // デバッグ情報の表示
         console_outA("msg: %s",      (char*)msg);
         console_outA("listener: %s", (char*)listener->name());
 
+        // 文字列比較のため msg を std::u8string に変換
         const auto msg_string = std::u8string(msg);
+
+        HRESULT hr = S_OK;
+
+        // 処理中のフラグを ON に
+        m_state |= STATE::MESSAGING;
+
+        // 重複チェック
         const auto range = m_msg_map.equal_range(std::move(msg_string));
         const auto end = range.second;
         for ( auto it = range.first; it != end; ++it )
         {
             if ( it->second == listener )
             {
-                console_out(TEXT("This message has been already attached to the component"));
-                console_out(TEXT("%s::Base::AttachMessage() end"), NAME);
-                return S_FALSE;
+                console_out(TEXT("Already attached"));
+                hr = S_FALSE;
+                break;
             }
         }
 
-        m_msg_map.emplace(msg, listener);
-        console_out(TEXT("Attachehed"));
+        // メッセージマップに登録
+        if ( S_OK == hr )
+        {
+            m_msg_map.emplace(msg, listener);
+            console_out(TEXT("Attachehed"));
+        }
+
+        // 処理中のフラグを OFF に
+        m_state ^= STATE::MESSAGING;
+
         console_out(TEXT("%s::Base::AttachMessage() end"), NAME);
 
-        return S_OK;
+        return hr;
     }
 
     HRESULT __stdcall DetachMessage
@@ -238,29 +279,52 @@ public:
             console_out(TEXT("%s::Base::DetachMessage() end"), NAME);
             return E_INVALIDARG;
         }
+        if ( (uint32_t)(m_state & STATE::MESSAGING) )
+        {
+            console_out(TEXT("Now processing messeges"));
+            console_out(TEXT("%s::Base::AttachMessage() end"), NAME);
+            return E_FAIL;
+        }
 
         // デバッグ情報の表示
         console_outA("msg: %s",      (char*)msg);
         console_outA("listener: %s", (char*)listener->name());
 
+        // 文字列比較のため msg を std::u8string に変換
         const auto msg_string = std::u8string(msg);
+
+        HRESULT hr = S_FALSE;
+
+        // 処理中のフラグを ON に
+        m_state |= STATE::MESSAGING;
+
+        // 解除対象をさがす
         const auto range = m_msg_map.equal_range(std::move(msg_string));
         const auto end = range.second;
         for ( auto it = range.first; it != end; ++it )
         {
             if ( it->second == listener )
             {
+                // メッセージマップから登録解除
                 m_msg_map.erase(it);
                 console_out(TEXT("Detachehed"));
-                console_out(TEXT("%s::Base::DetachMessage() end"), NAME);
-                return S_OK;
+
+                hr = S_OK;
+                break;
             }
         }
 
-        console_out(TEXT("This message was not attached to the component"));
+        // 処理中のフラグを OFF に
+        m_state ^= STATE::MESSAGING;
+
+        if ( S_OK != hr )
+        {
+            console_out(TEXT("Not attached"));
+        }
+
         console_out(TEXT("%s::Base::DetachMessage() end"), NAME);
 
-        return S_FALSE;
+        return hr;
     }
 
     HRESULT __stdcall NotifyMessage
@@ -277,16 +341,9 @@ public:
         console_outA("data:   0x%08x",   data ? data->get()  : 0);
         console_outA("size:   %u bytes", data ? data->size() : 0);
 
-        // データの解放
-        if ( data )
-        {
-            data->Release();
-            data = nullptr;
-        }
-
         console_out(TEXT("%s::Base::NotifyMessage() end"), NAME);
 
-        return S_OK;
+        return S_FALSE;
     }
 
     HRESULT __stdcall OpenConfiguration
@@ -317,46 +374,89 @@ public:
     }
 
 protected:
-    HRESULT __stdcall NotifyRequestedMessage
+    HRESULT __stdcall DistributeMessage
     (
         U8CSTR msg, IData* data
     )
     {
-        console_out(TEXT("%s::Base::NotifyRequestedMessage() begin"), NAME);
+        console_out(TEXT("%s::Base::DistributeMessage() begin"), NAME);
+
+        if ( ! m_alive )
+        {
+            console_out(TEXT("This component is dead"));
+            console_out(TEXT("%s::Base::DistributeMessage() end"), NAME);
+            return E_FAIL;
+        }
+
+        // 別スレッドで解放されてしまわないよう
+        // 予め参照カウントを増やしておく
+        const auto sender = this;
+        sender->AddRef();
+
+        // 別スレッドで解放されてしまわないよう
+        // 予め参照カウントを増やしておく
+        if ( data ) { data->AddRef(); }
+
+        // デバッグ情報の表示
+        console_outA("msg:    %s", (char*)msg);
+        console_outA("sender: %s", sender ? (char*)sender->name() : "(null)");
+        console_outA("name:   %s",       data ? (char*)data->name() : "(null)");
+        console_outA("data:   0x%08x",   data ? data->get()  : 0);
+        console_outA("size:   %u bytes", data ? data->size() : 0);
 
         // 通知キューにデータを積む
+        NotifyData notify_data { msg, sender, data };
         m_cs_notify.lock();
         {
-            NotifyData notify_data { msg, this, data };
-            m_q_notify.emplace(notify_data);
+            m_q_notify.emplace(std::move(notify_data));
+            console_out(TEXT("Stacked notify data"));
         }
         m_cs_notify.unlock();
 
         // 通知スレッドを起こす
         ::SetEvent(m_evt_notify);
 
-        console_out(TEXT("%s::Base::NotifyRequestedMessage() end"), NAME);
+        console_out(TEXT("%s::Base::DistributeMessage() end"), NAME);
 
-        return S_OK;
+        return S_ASYNCHRONOUS;
+    }
+
+    void __stdcall DistributeHResult
+    (
+        U8CSTR msg, HRESULT hr
+    )
+    {
+        const auto msg_data = new CubeMelon::Data<HRESULT>
+        {
+            (U8CSTR)"HRESULT", hr
+        };
+
+        this->DistributeMessage(msg, msg_data);
+
+        msg_data->Release();
     }
 
 private:
-    void __stdcall NotifyMessageLoop()
+    void __stdcall DistributeMessageLoop()
     {
+        NotifyData notify_data;
+
         // よく使う値をローカル定数として記憶
         const auto& evt_notify = this->m_evt_notify;
         auto&       cs_notify  = this->m_cs_notify;
         auto&       q          = this->m_q_notify;
 
         // メインループ
-        NotifyData notify_data;
         while ( m_alive )
         {
+            bool empty = false;
+
+            // 通知キューからデータを取り出す
             cs_notify.lock();
             {
                 if ( q.empty() )
                 {
-                    notify_data.sender = nullptr;
+                    empty = true;
                 }
                 else
                 {
@@ -366,41 +466,96 @@ private:
             }
             cs_notify.unlock();
 
-            if ( nullptr == notify_data.sender )
+            // キューが空だったら
+            if ( empty )
             {
+                // 通知データが積まれるまで待つ
                 ::WaitForSingleObject(evt_notify, INFINITE);
+                continue;
             }
-            else
-            {
-                const auto msg    = notify_data.msg;
-                const auto sender = notify_data.sender;
-                const auto data   = notify_data.data;
 
-                const auto msg_string = std::u8string(msg);
-                const auto range = m_msg_map.equal_range(std::move(msg_string));
-                const auto end = range.second;
-                for ( auto it = range.first; it != end; ++it )
+            const auto msg    = notify_data.msg;
+            const auto sender = notify_data.sender;
+            const auto data   = notify_data.data;
+
+            // 文字列比較のため msg を std::u8string に変換
+            const auto msg_string = std::u8string(msg);
+
+            // 処理中のフラグを ON に
+            m_state |= STATE::MESSAGING;
+
+            // メッセージを配信
+            const auto range = m_msg_map.equal_range(std::move(msg_string));
+            const auto end = range.second;
+            for ( auto it = range.first; it != end; ++it )
+            {
+                const auto listener = it->second.GetInterface();
+                listener->NotifyMessage(msg, sender, data);
+                // listener は 登録時に予め null チェックしてある
+            }
+
+            // 処理中のフラグを OFF に
+            m_state ^= STATE::MESSAGING;
+
+            // データの解放
+            if ( data ) { data->Release(); }
+            sender->Release();
+        }
+    }
+
+    void __stdcall DiscardMessage()
+    {
+        console_out(TEXT("Discarding notify data begin"));
+
+        NotifyData notify_data;
+
+        // よく使う値をローカル定数として記憶
+        auto& cs_notify  = this->m_cs_notify;
+        auto& q          = this->m_q_notify;
+
+        // 通知し切れなかったデータを破棄
+        while ( true )
+        {
+            bool empty = false;
+
+            // 通知キューからデータを取り出す
+            cs_notify.lock();
+            {
+                if ( q.empty() )
                 {
-                    const auto listener = it->second.GetInterface();
-                    if ( listener )
-                    {
-                        listener->NotifyMessage(msg, sender, data);
-                    }
+                    empty = true;
+                }
+                else
+                {
+                    notify_data = q.front();
+                    q.pop();
                 }
             }
-        }
-        while ( ! q.empty() )
-        {
-            notify_data = q.front();
-            q.pop();
+            cs_notify.unlock();
 
-            const auto data = notify_data.data;
-            if ( data )
+            // キューが空だったら
+            if ( empty )
             {
-                data->Release();
+                break;
             }
-            console_out(TEXT("Discarded notify data"));
+
+            const auto msg    = notify_data.msg;
+            const auto sender = notify_data.sender;
+            const auto data   = notify_data.data;
+
+            // デバッグ情報の表示
+            console_outA("msg:    %s", (char*)msg);
+            console_outA("sender: %s", sender ? (char*)sender->name() : "(null)");
+            console_outA("name:   %s",       data ? (char*)data->name() : "(null)");
+            console_outA("data:   0x%08x",   data ? data->get()  : 0);
+            console_outA("size:   %u bytes", data ? data->size() : 0);
+
+            // データの解放
+            if ( data ) { data->Release(); }
+            sender->Release();
         }
+
+        console_out(TEXT("Discarding notify data end"));
     }
 
 private:
@@ -476,13 +631,6 @@ public:
 
         *ppvObject = nullptr;
 
-        console_out
-        (
-            TEXT("IID: { %08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X }"),
-            riid.Data1, riid.Data2, riid.Data3,
-            riid.Data4[0], riid.Data4[1], riid.Data4[2], riid.Data4[3],
-            riid.Data4[4], riid.Data4[5], riid.Data4[6], riid.Data4[7]
-        );
         if ( IsEqualIID(riid, IID_IUnknown) )
         {
             console_out(TEXT("IID_IUnknown"));
@@ -532,13 +680,6 @@ public:
 
         *ppvObject = nullptr;
 
-        console_out
-        (
-            TEXT("IID: { %08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X }"),
-            riid.Data1, riid.Data2, riid.Data3,
-            riid.Data4[0], riid.Data4[1], riid.Data4[2], riid.Data4[3],
-            riid.Data4[4], riid.Data4[5], riid.Data4[6], riid.Data4[7]
-        );
         if ( IsEqualIID(riid, IID_IUnknown) )
         {
             console_out(TEXT("IID_IUnknown"));
@@ -608,13 +749,6 @@ public:
 
         *ppvObject = nullptr;
 
-        console_out
-        (
-            TEXT("IID: { %08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X }"),
-            riid.Data1, riid.Data2, riid.Data3,
-            riid.Data4[0], riid.Data4[1], riid.Data4[2], riid.Data4[3],
-            riid.Data4[4], riid.Data4[5], riid.Data4[6], riid.Data4[7]
-        );
         if ( IsEqualIID(riid, IID_IUnknown) )
         {
             console_out(TEXT("IID_IUnknown"));

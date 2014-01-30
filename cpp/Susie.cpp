@@ -3,11 +3,9 @@
 //----------------------------------------------------------------------------//
 //
 // Susie プラグインのラッパークラス
-//   Copyright (C) 2013 tapetums
+//   Copyright (C) 2013-2014 tapetums
 //
 //---------------------------------------------------------------------------//
-
-#include <strsafe.h>
 
 #include "DebugPrint.hpp"
 #include "UString.hpp"
@@ -15,306 +13,294 @@
 #include "Susie.hpp"
 
 //---------------------------------------------------------------------------//
+//
+// Pimpl Idiom
+//
+//---------------------------------------------------------------------------//
 
-Susie::Susie()
+struct Susie::Impl
 {
-    console_out(TEXT("Susie::ctor() begin"));
+    TCHAR                path[MAX_PATH];
+    HMODULE              module           = nullptr;
+    SPI_GetPluginInfoA   GetPluginInfoA   = nullptr;
+    SPI_GetPluginInfoW   GetPluginInfoW   = nullptr;
+    SPI_IsSupportedA     IsSupportedA     = nullptr;
+    SPI_IsSupportedW     IsSupportedW     = nullptr;
+    SPI_GetPictureInfoA  GetPictureInfoA  = nullptr;
+    SPI_GetPictureInfoW  GetPictureInfoW  = nullptr;
+    SPI_GetPictureA      GetPictureA      = nullptr;
+    SPI_GetPictureW      GetPictureW      = nullptr;
+    SPI_GetPreviewA      GetPreviewA      = nullptr;
+    SPI_GetPreviewW      GetPreviewW      = nullptr;
+    SPI_GetArchiveInfoA  GetArchiveInfoA  = nullptr;
+    SPI_GetArchiveInfoW  GetArchiveInfoW  = nullptr;
+    SPI_GetFileInfoA     GetFileInfoA     = nullptr;
+    SPI_GetFileInfoW     GetFileInfoW     = nullptr;
+    SPI_GetFileA         GetFileA         = nullptr;
+    SPI_GetFileW         GetFileW         = nullptr;
+    SPI_ConfigurationDlg ConfigurationDlg = nullptr;
+};
 
-    m_spi_path[0] = '\0';
+//---------------------------------------------------------------------------//
+//
+// Ctor / Dtor
+//
+//---------------------------------------------------------------------------//
 
-    console_out(TEXT("Susie::ctor() end"));
+Susie::Susie(LPCTSTR path)
+{
+    console_out(TEXT("%s::ctor() begin"), TEXT(__FILE__));
+
+    pimpl = new Impl;
+    pimpl->path[0] = '\0';
+
+    this->Load(path);
+
+    console_out(TEXT("%s::ctor() end"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
 
 Susie::~Susie()
 {
-    console_out(TEXT("Susie::dtor() begin"));
+    console_out(TEXT("%s::dtor() begin"), TEXT(__FILE__));
 
-    this->Free();
+    if ( nullptr == pimpl )
+    {
+        console_out(TEXT("Already moved"));
+    }
+    else
+    {
+        this->Free();
 
-    console_out(TEXT("Susie::dtor() end"));
+        delete pimpl;
+        pimpl = nullptr;
+    }
+
+    console_out(TEXT("%s::dtor() end"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
 
 Susie::Susie(Susie&& rhs)
 {
-    console_out(TEXT("Susie::ctor(move) begin"));
+    console_out(TEXT("%s::ctor(move) begin"), TEXT(__FILE__));
 
-    ::StringCchCopy(m_spi_path, MAX_PATH, rhs.m_spi_path);
-    m_module           = rhs.m_module;
-    m_GetPluginInfoA   = rhs.m_GetPluginInfoA;
-    m_GetPluginInfoW   = rhs.m_GetPluginInfoW;
-    m_IsSupportedA     = rhs.m_IsSupportedA;
-    m_IsSupportedW     = rhs.m_IsSupportedW;
-    m_GetPictureInfoA  = rhs.m_GetPictureInfoA;
-    m_GetPictureInfoW  = rhs.m_GetPictureInfoW;
-    m_GetPictureA      = rhs.m_GetPictureA;
-    m_GetPictureW      = rhs.m_GetPictureW;
-    m_GetPreviewA      = rhs.m_GetPreviewA;
-    m_GetPreviewW      = rhs.m_GetPreviewW;
-    m_GetArchiveInfoA  = rhs.m_GetArchiveInfoA;
-    m_GetArchiveInfoW  = rhs.m_GetArchiveInfoW;
-    m_GetFileInfoA     = rhs.m_GetFileInfoA;
-    m_GetFileInfoW     = rhs.m_GetFileInfoW;
-    m_GetFileA         = rhs.m_GetFileA;
-    m_GetFileW         = rhs.m_GetFileW;
-    m_ConfigurationDlg = rhs.m_ConfigurationDlg;
+    rhs.pimpl = pimpl;
 
-    rhs.m_spi_path[0]      = '\0';
-    rhs.m_module           = nullptr;
-    rhs.m_GetPluginInfoA   = nullptr;
-    rhs.m_GetPluginInfoW   = nullptr;
-    rhs.m_IsSupportedA     = nullptr;
-    rhs.m_IsSupportedW     = nullptr;
-    rhs.m_GetPictureInfoA  = nullptr;
-    rhs.m_GetPictureInfoW  = nullptr;
-    rhs.m_GetPictureA      = nullptr;
-    rhs.m_GetPictureW      = nullptr;
-    rhs.m_GetPreviewA      = nullptr;
-    rhs.m_GetPreviewW      = nullptr;
-    rhs.m_GetArchiveInfoA  = nullptr;
-    rhs.m_GetArchiveInfoW  = nullptr;
-    rhs.m_GetFileInfoA     = nullptr;
-    rhs.m_GetFileInfoW     = nullptr;
-    rhs.m_GetFileA         = nullptr;
-    rhs.m_GetFileW         = nullptr;
-    rhs.m_ConfigurationDlg = nullptr;
+    pimpl = nullptr;
 
-    console_out(TEXT("Susie::ctor(move) end"));
+    console_out(TEXT("%s::ctor(move) end"), TEXT(__FILE__));
 }
 
 //---------------------------------------------------------------------------//
 
 Susie& Susie::operator= (Susie&& rhs)
 {
-    console_out(TEXT("Susie::operator=(move) begin"));
+    console_out(TEXT("%s::operator=(move) begin"), TEXT(__FILE__));
 
-    ::StringCchCopy(m_spi_path, MAX_PATH, rhs.m_spi_path);
-    m_module           = rhs.m_module;
-    m_GetPluginInfoA   = rhs.m_GetPluginInfoA;
-    m_GetPluginInfoW   = rhs.m_GetPluginInfoW;
-    m_IsSupportedA     = rhs.m_IsSupportedA;
-    m_IsSupportedW     = rhs.m_IsSupportedW;
-    m_GetPictureInfoA  = rhs.m_GetPictureInfoA;
-    m_GetPictureInfoW  = rhs.m_GetPictureInfoW;
-    m_GetPictureA      = rhs.m_GetPictureA;
-    m_GetPictureW      = rhs.m_GetPictureW;
-    m_GetPreviewA      = rhs.m_GetPreviewA;
-    m_GetPreviewW      = rhs.m_GetPreviewW;
-    m_GetArchiveInfoA  = rhs.m_GetArchiveInfoA;
-    m_GetArchiveInfoW  = rhs.m_GetArchiveInfoW;
-    m_GetFileInfoA     = rhs.m_GetFileInfoA;
-    m_GetFileInfoW     = rhs.m_GetFileInfoW;
-    m_GetFileA         = rhs.m_GetFileA;
-    m_GetFileW         = rhs.m_GetFileW;
-    m_ConfigurationDlg = rhs.m_ConfigurationDlg;
+    rhs.pimpl = pimpl;
 
-    rhs.m_spi_path[0]      = '\0';
-    rhs.m_module           = nullptr;
-    rhs.m_GetPluginInfoA   = nullptr;
-    rhs.m_GetPluginInfoW   = nullptr;
-    rhs.m_IsSupportedA     = nullptr;
-    rhs.m_IsSupportedW     = nullptr;
-    rhs.m_GetPictureInfoA  = nullptr;
-    rhs.m_GetPictureInfoW  = nullptr;
-    rhs.m_GetPictureA      = nullptr;
-    rhs.m_GetPictureW      = nullptr;
-    rhs.m_GetPreviewA      = nullptr;
-    rhs.m_GetPreviewW      = nullptr;
-    rhs.m_GetArchiveInfoA  = nullptr;
-    rhs.m_GetArchiveInfoW  = nullptr;
-    rhs.m_GetFileInfoA     = nullptr;
-    rhs.m_GetFileInfoW     = nullptr;
-    rhs.m_GetFileA         = nullptr;
-    rhs.m_GetFileW         = nullptr;
-    rhs.m_ConfigurationDlg = nullptr;
+    pimpl = nullptr;
 
-    console_out(TEXT("Susie::operator=(move) end"));
+    console_out(TEXT("%s::operator=(move) end"), TEXT(__FILE__));
 
     return *this;
 }
 
 //---------------------------------------------------------------------------//
+//
+// Properties
+//
+//---------------------------------------------------------------------------//
 
-bool __stdcall Susie::Load(LPCTSTR spi_path)
+LPCTSTR __stdcall Susie::path() const
 {
-    if ( nullptr == spi_path )
+    return pimpl->path;
+}
+
+//---------------------------------------------------------------------------//
+//
+// Methods
+//
+//---------------------------------------------------------------------------//
+
+HRESULT __stdcall Susie::Load(LPCTSTR path)
+{
+    if ( nullptr == path )
     {
-        return false;
+        return E_INVALIDARG;
     }
 
-    console_out(TEXT("Susie::Load() begin"));
+    console_out(TEXT("%s::Load() begin"), TEXT(__FILE__));
 
-    if ( m_module )
+    if ( pimpl->module )
     {
         console_out(TEXT("Already loaded"));
-        console_out(TEXT("Susie::Load() end"));
-        return false;
+        console_out(TEXT("%s::Load() end"), TEXT(__FILE__));
+        return S_FALSE;
     }
 
     // DLLの読み込み
-    m_module = ::LoadLibraryEx
+    pimpl->module = ::LoadLibraryEx
     (
-        spi_path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH
+        path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH
     );
-    if ( nullptr == m_module )
+    if ( nullptr == pimpl->module )
     {
         console_out(TEXT("LoadLibraryEx() failed"));
         goto FREE_SPI;
     }
 
     // DLLのフルパスを取得
-    ::GetModuleFileName(m_module, m_spi_path, MAX_PATH);
-    console_out(m_spi_path);
+    ::GetModuleFileName(pimpl->module, pimpl->path, MAX_PATH);
+    console_out(pimpl->path);
 
     // GetPluginInfo
-    m_GetPluginInfoA = (SPI_GetPluginInfoA)::GetProcAddress
+    pimpl->GetPluginInfoA = (SPI_GetPluginInfoA)::GetProcAddress
     (
-        m_module, "GetPluginInfo"
+        pimpl->module, "GetPluginInfo"
     );
-    m_GetPluginInfoW = (SPI_GetPluginInfoW)::GetProcAddress
+    pimpl->GetPluginInfoW = (SPI_GetPluginInfoW)::GetProcAddress
     (
-        m_module, "GetPluginInfoW"
+        pimpl->module, "GetPluginInfoW"
     );
-    if ( nullptr == m_GetPluginInfoA && nullptr == m_GetPluginInfoW )
+    if ( nullptr == pimpl->GetPluginInfoA && nullptr == pimpl->GetPluginInfoW )
     {
         console_out(TEXT("GetPluginInfo was not found"));
         goto FREE_SPI;
     }
     // IsSupported
-    m_IsSupportedA = (SPI_IsSupportedA)::GetProcAddress
+    pimpl->IsSupportedA = (SPI_IsSupportedA)::GetProcAddress
     (
-        m_module, "IsSupported"
+        pimpl->module, "IsSupported"
     );
-    m_IsSupportedW = (SPI_IsSupportedW)::GetProcAddress
+    pimpl->IsSupportedW = (SPI_IsSupportedW)::GetProcAddress
     (
-        m_module, "IsSupportedW"
+        pimpl->module, "IsSupportedW"
     );
-    if ( nullptr == m_IsSupportedA && nullptr == m_IsSupportedW )
+    if ( nullptr == pimpl->IsSupportedA && nullptr == pimpl->IsSupportedW )
     {
         console_out(TEXT("IsSupported was not found"));
         goto FREE_SPI;
     }
 
     // GetPictureInfo
-    m_GetPictureInfoA = (SPI_GetPictureInfoA)::GetProcAddress
+    pimpl->GetPictureInfoA = (SPI_GetPictureInfoA)::GetProcAddress
     (
-        m_module, "GetPictureInfo"
+        pimpl->module, "GetPictureInfo"
     );
-    m_GetPictureInfoW = (SPI_GetPictureInfoW)::GetProcAddress
+    pimpl->GetPictureInfoW = (SPI_GetPictureInfoW)::GetProcAddress
     (
-        m_module, "GetPictureInfoW"
+        pimpl->module, "GetPictureInfoW"
     );
     // GetPicture
-    m_GetPictureA = (SPI_GetPictureA)::GetProcAddress
+    pimpl->GetPictureA = (SPI_GetPictureA)::GetProcAddress
     (
-        m_module, "GetPicture"
+        pimpl->module, "GetPicture"
     );
-    m_GetPictureW = (SPI_GetPictureW)::GetProcAddress
+    pimpl->GetPictureW = (SPI_GetPictureW)::GetProcAddress
     (
-        m_module, "GetPictureW"
+        pimpl->module, "GetPictureW"
     );
     // GetPreview
-    m_GetPreviewA = (SPI_GetPreviewA)::GetProcAddress
+    pimpl->GetPreviewA = (SPI_GetPreviewA)::GetProcAddress
     (
-        m_module, "GetPreview"
+        pimpl->module, "GetPreview"
     );
-    m_GetPreviewW = (SPI_GetPreviewW)::GetProcAddress
+    pimpl->GetPreviewW = (SPI_GetPreviewW)::GetProcAddress
     (
-        m_module, "GetPreviewW"
+        pimpl->module, "GetPreviewW"
     );
 
     // GetArchiveInfo
-    m_GetArchiveInfoA = (SPI_GetArchiveInfoA)::GetProcAddress
+    pimpl->GetArchiveInfoA = (SPI_GetArchiveInfoA)::GetProcAddress
     (
-        m_module, "GetArchiveInfo"
+        pimpl->module, "GetArchiveInfo"
     );
-    m_GetArchiveInfoW = (SPI_GetArchiveInfoW)::GetProcAddress
+    pimpl->GetArchiveInfoW = (SPI_GetArchiveInfoW)::GetProcAddress
     (
-        m_module, "GetArchiveInfoW"
+        pimpl->module, "GetArchiveInfoW"
     );
     // GetFileInfo
-    m_GetFileInfoA = (SPI_GetFileInfoA)::GetProcAddress
+    pimpl->GetFileInfoA = (SPI_GetFileInfoA)::GetProcAddress
     (
-        m_module, "GetFileInfo"
+        pimpl->module, "GetFileInfo"
     );
-    m_GetFileInfoW = (SPI_GetFileInfoW)::GetProcAddress
+    pimpl->GetFileInfoW = (SPI_GetFileInfoW)::GetProcAddress
     (
-        m_module, "GetFileInfoW"
+        pimpl->module, "GetFileInfoW"
     );
     // GetFile
-    m_GetFileA = (SPI_GetFileA)::GetProcAddress
+    pimpl->GetFileA = (SPI_GetFileA)::GetProcAddress
     (
-        m_module, "GetFile"
+        pimpl->module, "GetFile"
     );
-    m_GetFileW = (SPI_GetFileW)::GetProcAddress
+    pimpl->GetFileW = (SPI_GetFileW)::GetProcAddress
     (
-        m_module, "GetFileW"
+        pimpl->module, "GetFileW"
     );
 
     // ConfigurationDlg
-    m_ConfigurationDlg = (SPI_ConfigurationDlg)::GetProcAddress
+    pimpl->ConfigurationDlg = (SPI_ConfigurationDlg)::GetProcAddress
     (
-        m_module, "ConfigurationDlg"
+        pimpl->module, "ConfigurationDlg"
     );
 
     console_out(TEXT("Loaded"));
-    console_out(TEXT("Susie::Load() end"));
+    console_out(TEXT("%s::Load() end"), TEXT(__FILE__));
 
-    return true;
+    return S_OK;
 
 FREE_SPI: this->Free();
 
-    console_out(TEXT("Susie::Load() end"));
+    console_out(TEXT("%s::Load() end"), TEXT(__FILE__));
 
-    return false;
+    return E_FAIL;
 }
 
 //---------------------------------------------------------------------------//
 
-bool __stdcall Susie::Free()
+HRESULT __stdcall Susie::Free()
 {
-    console_out(TEXT("Susie::Free() begin"));
-    console_out(m_spi_path);
+    console_out(TEXT("%s::Free() begin"), TEXT(__FILE__));
+    console_out(pimpl->path);
 
-    if ( m_module )
+    HRESULT hr = S_OK;
+
+    if ( pimpl->module )
     {
-        ::FreeLibrary(m_module);
+        ::FreeLibrary(pimpl->module);
+    }
+    else
+    {
+        hr = S_FALSE;
     }
 
-    m_spi_path[0]      = '\0';
-    m_module           = nullptr;
-    m_GetPluginInfoA   = nullptr;
-    m_GetPluginInfoW   = nullptr;
-    m_IsSupportedA     = nullptr;
-    m_IsSupportedW     = nullptr;
-    m_GetPictureInfoA  = nullptr;
-    m_GetPictureInfoW  = nullptr;
-    m_GetPictureA      = nullptr;
-    m_GetPictureW      = nullptr;
-    m_GetPreviewA      = nullptr;
-    m_GetPreviewW      = nullptr;
-    m_GetArchiveInfoA  = nullptr;
-    m_GetArchiveInfoW  = nullptr;
-    m_GetFileInfoA     = nullptr;
-    m_GetFileInfoW     = nullptr;
-    m_GetFileA         = nullptr;
-    m_GetFileW         = nullptr;
-    m_ConfigurationDlg = nullptr;
+    pimpl->path[0]          = '\0';
+    pimpl->module           = nullptr;
+    pimpl->GetPluginInfoA   = nullptr;
+    pimpl->GetPluginInfoW   = nullptr;
+    pimpl->IsSupportedA     = nullptr;
+    pimpl->IsSupportedW     = nullptr;
+    pimpl->GetPictureInfoA  = nullptr;
+    pimpl->GetPictureInfoW  = nullptr;
+    pimpl->GetPictureA      = nullptr;
+    pimpl->GetPictureW      = nullptr;
+    pimpl->GetPreviewA      = nullptr;
+    pimpl->GetPreviewW      = nullptr;
+    pimpl->GetArchiveInfoA  = nullptr;
+    pimpl->GetArchiveInfoW  = nullptr;
+    pimpl->GetFileInfoA     = nullptr;
+    pimpl->GetFileInfoW     = nullptr;
+    pimpl->GetFileA         = nullptr;
+    pimpl->GetFileW         = nullptr;
+    pimpl->ConfigurationDlg = nullptr;
 
     console_out(TEXT("Freed"));
-    console_out(TEXT("Susie::Free() end"));
+    console_out(TEXT("%s::Free() end"), TEXT(__FILE__));
 
-    return true;
-}
-
-//---------------------------------------------------------------------------//
-
-LPCTSTR __stdcall Susie::SpiPath() const
-{
-    return m_spi_path;
+    return hr;
 }
 
 //---------------------------------------------------------------------------//
@@ -322,10 +308,14 @@ LPCTSTR __stdcall Susie::SpiPath() const
 #if defined(_UNICODE) || defined(UNICODE)
 
 //---------------------------------------------------------------------------//
+//
+// Utility Functions
+//
+//---------------------------------------------------------------------------//
 
 // マルチバイト文字列をワイド文字列に変換して
 // 同じバッファ内に無理矢理つっこむ関数
-void __stdcall MBCSztoUnicodez(char* buf, size_t buflen)
+static void __stdcall MBCSztoUnicodez(char* buf, size_t buflen)
 {
     const auto tmp = toUnicodez(buf);
 
@@ -337,7 +327,7 @@ void __stdcall MBCSztoUnicodez(char* buf, size_t buflen)
 
 // ワイド文字列をマルチバイト文字列に変換して
 // 同じバッファ内に無理矢理つっこむ関数
-void __stdcall UnicodeztoMBCSz(wchar_t* buf)
+static void __stdcall UnicodeztoMBCSz(wchar_t* buf)
 {
     const auto tmp = toMBCSz(buf);
     const auto buflen = sizeof(wchar_t) * (::wcslen(buf) + 1);
@@ -348,16 +338,20 @@ void __stdcall UnicodeztoMBCSz(wchar_t* buf)
 }
 
 //---------------------------------------------------------------------------//
+//
+// Methods
+//
+//---------------------------------------------------------------------------//
 
 SUSIE_API Susie::GetPluginInfo(int32_t infono, LPWSTR buf, int32_t buflen)
 {
-    if ( m_GetPluginInfoW )
+    if ( pimpl->GetPluginInfoW )
     {
-        return m_GetPluginInfoW(infono, buf, buflen);
+        return pimpl->GetPluginInfoW(infono, buf, buflen);
     }
-    else if ( m_GetPluginInfoA )
+    else if ( pimpl->GetPluginInfoA )
     {
-        const auto result = m_GetPluginInfoA(infono, (LPSTR)buf, buflen);
+        const auto result = pimpl->GetPluginInfoA(infono, (LPSTR)buf, buflen);
         if ( result == SPI_ALL_RIGHT )
         {
             MBCSztoUnicodez((LPSTR)buf, buflen);
@@ -374,15 +368,15 @@ SUSIE_API Susie::GetPluginInfo(int32_t infono, LPWSTR buf, int32_t buflen)
 
 SUSIE_API Susie::IsSupported(LPCWSTR filename, void* dw)
 {
-    if ( m_IsSupportedW )
+    if ( pimpl->IsSupportedW )
     {
-        return m_IsSupportedW(filename, dw);
+        return pimpl->IsSupportedW(filename, dw);
     }
-    else if ( m_IsSupportedA )
+    else if ( pimpl->IsSupportedA )
     {
         UnicodeztoMBCSz((LPWSTR)filename);
 
-        return m_IsSupportedA((LPCSTR)filename, dw);
+        return pimpl->IsSupportedA((LPCSTR)filename, dw);
     }
     else
     {
@@ -394,17 +388,17 @@ SUSIE_API Susie::IsSupported(LPCWSTR filename, void* dw)
 
 SUSIE_API Susie::GetPictureInfo(LPCWSTR buf, size_t len, SPI_FLAG flag, SusiePictureInfo* lpInfo)
 {
-    if ( m_GetPictureInfoW )
+    if ( pimpl->GetPictureInfoW )
     {
-        return m_GetPictureInfoW(buf, len, flag, lpInfo);
+        return pimpl->GetPictureInfoW(buf, len, flag, lpInfo);
     }
-    else if ( m_GetPictureInfoA )
+    else if ( pimpl->GetPictureInfoA )
     {
         if ( !(flag & SPI_INPUT_MEMORY) )
         {
             UnicodeztoMBCSz((LPWSTR)buf);
         }
-        return m_GetPictureInfoA((LPCSTR)buf, len, flag, lpInfo);
+        return pimpl->GetPictureInfoA((LPCSTR)buf, len, flag, lpInfo);
     }
     else
     {
@@ -416,18 +410,18 @@ SUSIE_API Susie::GetPictureInfo(LPCWSTR buf, size_t len, SPI_FLAG flag, SusiePic
 
 SUSIE_API Susie::GetPicture(LPCWSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBInfo, HANDLE* pHBm, SUSIE_PROGRESS progressCallback, intptr_t lData)
 {
-    if ( m_GetPictureW )
+    if ( pimpl->GetPictureW )
     {
-        return m_GetPictureW(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
+        return pimpl->GetPictureW(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
     }
-    else if ( m_GetPictureA )
+    else if ( pimpl->GetPictureA )
     {
     
         if ( !(flag & SPI_INPUT_MEMORY) )
         {
             UnicodeztoMBCSz((LPWSTR)buf);
         }
-        return m_GetPictureA((LPCSTR)buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
+        return pimpl->GetPictureA((LPCSTR)buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
     }
     else
     {
@@ -439,17 +433,17 @@ SUSIE_API Susie::GetPicture(LPCWSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBI
 
 SUSIE_API Susie::GetPreview(LPCWSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBInfo, HANDLE* pHBm, SUSIE_PROGRESS progressCallback, intptr_t lData)
 {
-    if ( m_GetPreviewW )
+    if ( pimpl->GetPreviewW )
     {
-        return m_GetPreviewW(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
+        return pimpl->GetPreviewW(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
     }
-    else if ( m_GetPreviewA )
+    else if ( pimpl->GetPreviewA )
     {
         if ( !(flag & SPI_INPUT_MEMORY) )
         {
             UnicodeztoMBCSz((LPWSTR)buf);
         }
-        return m_GetPreviewA((LPCSTR)buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
+        return pimpl->GetPreviewA((LPCSTR)buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
     }
     else
     {
@@ -461,17 +455,17 @@ SUSIE_API Susie::GetPreview(LPCWSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBI
 
 SUSIE_API Susie::GetArchiveInfo(LPCWSTR buf, size_t len, SPI_FLAG flag, HLOCAL* lphInf)
 {
-    if ( m_GetArchiveInfoW )
+    if ( pimpl->GetArchiveInfoW )
     {
-        return m_GetArchiveInfoW(buf, len, flag, lphInf);
+        return pimpl->GetArchiveInfoW(buf, len, flag, lphInf);
     }
-    else if ( m_GetArchiveInfoA )
+    else if ( pimpl->GetArchiveInfoA )
     {
         if ( !(flag & SPI_INPUT_MEMORY) )
         {
             UnicodeztoMBCSz((LPWSTR)buf);
         }
-        return m_GetArchiveInfoA((LPCSTR)buf, len, flag, lphInf);
+        return pimpl->GetArchiveInfoA((LPCSTR)buf, len, flag, lphInf);
     }
     else
     {
@@ -483,11 +477,11 @@ SUSIE_API Susie::GetArchiveInfo(LPCWSTR buf, size_t len, SPI_FLAG flag, HLOCAL* 
 
 SUSIE_API Susie::GetFileInfo(LPCWSTR buf, size_t len, LPCWSTR filename, SPI_FLAG flag, SusieFileInfoW* lpInfo)
 {
-    if ( m_GetFileInfoW )
+    if ( pimpl->GetFileInfoW )
     {
-        return m_GetFileInfoW(buf, len, filename, flag, lpInfo);
+        return pimpl->GetFileInfoW(buf, len, filename, flag, lpInfo);
     }
-    else if ( m_GetFileInfoA )
+    else if ( pimpl->GetFileInfoA )
     {
         UnicodeztoMBCSz((LPWSTR)filename);
         if ( !(flag & SPI_INPUT_MEMORY) )
@@ -496,7 +490,7 @@ SUSIE_API Susie::GetFileInfo(LPCWSTR buf, size_t len, LPCWSTR filename, SPI_FLAG
         }
 
         SusieFileInfoA info;
-        const auto result =  m_GetFileInfoA((LPCSTR)buf, len, (LPCSTR)filename, flag, &info);
+        const auto result =  pimpl->GetFileInfoA((LPCSTR)buf, len, (LPCSTR)filename, flag, &info);
         if ( result == SPI_ALL_RIGHT )
         {
             ::CopyMemory(lpInfo,           &info,          sizeof(uint8_t)*8 + sizeof(size_t)*3 + sizeof(susie_time_t));
@@ -519,11 +513,11 @@ SUSIE_API Susie::GetFileInfo(LPCWSTR buf, size_t len, LPCWSTR filename, SPI_FLAG
 
 SUSIE_API Susie::GetFile(LPCWSTR src, size_t len, LPWSTR dest, SPI_FLAG flag, SUSIE_PROGRESS progressCallback, intptr_t lData)
 {
-    if ( m_GetFileW )
+    if ( pimpl->GetFileW )
     {
-        return m_GetFileW(src, len, dest, flag, progressCallback, lData);
+        return pimpl->GetFileW(src, len, dest, flag, progressCallback, lData);
     }
-    else if ( m_GetFileA )
+    else if ( pimpl->GetFileA )
     {
         if ( !(flag & SPI_INPUT_MEMORY) )
         {
@@ -533,7 +527,7 @@ SUSIE_API Susie::GetFile(LPCWSTR src, size_t len, LPWSTR dest, SPI_FLAG flag, SU
         {
             UnicodeztoMBCSz((LPWSTR)dest);
         }
-        return m_GetFileA((LPCSTR)src, len, (LPSTR)dest, flag, progressCallback, lData);
+        return pimpl->GetFileA((LPCSTR)src, len, (LPSTR)dest, flag, progressCallback, lData);
     }
     else
     {
@@ -549,9 +543,9 @@ SUSIE_API Susie::GetFile(LPCWSTR src, size_t len, LPWSTR dest, SPI_FLAG flag, SU
 
 SUSIE_API Susie::GetPluginInfo(int32_t infono, LPSTR buf, int32_t buflen)
 {
-    if ( m_GetPluginInfoA )
+    if ( pimpl->GetPluginInfoA )
     {
-        return m_GetPluginInfoA(infono, buf, buflen);
+        return pimpl->GetPluginInfoA(infono, buf, buflen);
     }
     else
     {
@@ -563,9 +557,9 @@ SUSIE_API Susie::GetPluginInfo(int32_t infono, LPSTR buf, int32_t buflen)
 
 SUSIE_API Susie::IsSupported(LPCSTR filename, void* dw)
 {
-    if ( m_IsSupportedA )
+    if ( pimpl->IsSupportedA )
     {
-        return m_IsSupportedA(filename, dw);
+        return pimpl->IsSupportedA(filename, dw);
     }
     else
     {
@@ -577,9 +571,9 @@ SUSIE_API Susie::IsSupported(LPCSTR filename, void* dw)
 
 SUSIE_API Susie::GetPictureInfo(LPCSTR buf, size_t len, SPI_FLAG flag, SusiePictureInfo* lpInfo)
 {
-    if ( m_GetPictureInfoA )
+    if ( pimpl->GetPictureInfoA )
     {
-        return m_GetPictureInfoA(buf, len, flag, lpInfo);
+        return pimpl->GetPictureInfoA(buf, len, flag, lpInfo);
     }
     else
     {
@@ -591,9 +585,9 @@ SUSIE_API Susie::GetPictureInfo(LPCSTR buf, size_t len, SPI_FLAG flag, SusiePict
 
 SUSIE_API Susie::GetPicture(LPCSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBInfo, HANDLE* pHBm, SUSIE_PROGRESS progressCallback, intptr_t lData)
 {
-    if ( m_GetPictureA )
+    if ( pimpl->GetPictureA )
     {
-        return m_GetPictureA(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
+        return pimpl->GetPictureA(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
     }
     else
     {
@@ -605,9 +599,9 @@ SUSIE_API Susie::GetPicture(LPCSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBIn
 
 SUSIE_API Susie::GetPreview(LPCSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBInfo, HANDLE* pHBm, SUSIE_PROGRESS progressCallback, intptr_t lData)
 {
-    if ( m_GetPreviewA )
+    if ( pimpl->GetPreviewA )
     {
-        return m_GetPreviewA(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
+        return pimpl->GetPreviewA(buf, len, flag, pHBInfo, pHBm, progressCallback, lData);
     }
     else
     {
@@ -619,9 +613,9 @@ SUSIE_API Susie::GetPreview(LPCSTR buf, size_t len, SPI_FLAG flag, HANDLE* pHBIn
 
 SUSIE_API Susie::GetArchiveInfo(LPCSTR buf, size_t len, SPI_FLAG flag, HLOCAL* lphInf)
 {
-    if ( m_GetArchiveInfoA )
+    if ( pimpl->GetArchiveInfoA )
     {
-        return m_GetArchiveInfoA(buf, len, flag, lphInf);
+        return pimpl->GetArchiveInfoA(buf, len, flag, lphInf);
     }
     else
     {
@@ -633,9 +627,9 @@ SUSIE_API Susie::GetArchiveInfo(LPCSTR buf, size_t len, SPI_FLAG flag, HLOCAL* l
 
 SUSIE_API Susie::GetFileInfo(LPCSTR buf, size_t len, LPCSTR filename, SPI_FLAG flag, SusieFileInfoA* lpInfo)
 {
-    if ( m_GetFileInfoA )
+    if ( pimpl->GetFileInfoA )
     {
-        return m_GetFileInfoA(buf, len, filename, flag, lpInfo);
+        return pimpl->GetFileInfoA(buf, len, filename, flag, lpInfo);
     }
     else
     {
@@ -647,9 +641,9 @@ SUSIE_API Susie::GetFileInfo(LPCSTR buf, size_t len, LPCSTR filename, SPI_FLAG f
 
 SUSIE_API Susie::GetFile(LPCSTR src, size_t len, LPSTR dest, SPI_FLAG flag, SUSIE_PROGRESS progressCallback, intptr_t lData)
 {
-    if ( m_GetFileA )
+    if ( pimpl->GetFileA )
     {
-        return m_GetFileA(src, len, dest, flag, progressCallback, lData);
+        return pimpl->GetFileA(src, len, dest, flag, progressCallback, lData);
     }
     else
     {
@@ -665,9 +659,9 @@ SUSIE_API Susie::GetFile(LPCSTR src, size_t len, LPSTR dest, SPI_FLAG flag, SUSI
 
 SUSIE_API Susie::ConfigurationDlg(HWND parent, SPI_FNC_CODE fnc)
 {
-    if ( m_ConfigurationDlg )
+    if ( pimpl->ConfigurationDlg )
     {
-        return m_ConfigurationDlg(parent, fnc);
+        return pimpl->ConfigurationDlg(parent, fnc);
     }
     else
     {

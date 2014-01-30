@@ -459,14 +459,14 @@ HRESULT __stdcall UWnd::ToggleFullScreen()
 
 LRESULT __stdcall UWnd::WndProc(HWND hwnd, UINT uMsg, WPARAM wp, LPARAM lp)
 {
-    if ( uMsg == WM_CLOSE )
+    if ( uMsg == WM_DESTROY )
     {
-        console_out(TEXT("UWnd::WndProc( WM_CLOSE ) begin"));
+        console_out(TEXT("UWnd::WndProc( WM_DESTROY ) begin"));
         {
             console_out(TEXT("PostQuitMessage(0)"));
             ::PostQuitMessage(0);
         }
-        console_out(TEXT("UWnd::WndProc( WM_CLOSE ) end"));
+        console_out(TEXT("UWnd::WndProc( WM_DESTROY ) end"));
     }
 
     return ::DefWindowProc(hwnd, uMsg, wp, lp);

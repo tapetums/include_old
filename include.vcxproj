@@ -177,6 +177,7 @@
   <ItemGroup>
     <ClInclude Include="Application.hpp" />
     <ClInclude Include="ClassFactory.hpp" />
+    <ClInclude Include="Collection.hpp" />
     <ClInclude Include="ComponentBase.hpp" />
     <ClInclude Include="ComPtr.hpp" />
     <ClInclude Include="Data.hpp" />

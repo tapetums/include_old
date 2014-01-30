@@ -34,7 +34,7 @@ static const IID IID_IDataArray =
 static const IID IID_ICompAdapter =
 { 0x6036103d, 0xe3bd, 0x46ba, { 0xb9, 0xa8, 0x3f, 0xfd, 0xfd, 0x68, 0xd7, 0x23 } };
 
-static const IID IID_ICompCollection =
+static const IID IID_ICompAdapterCollection =
 { 0x45e0aaf1, 0x3e4e, 0x4e6e, { 0x92, 0x5b, 0x92, 0x9e, 0xc1, 0xa5, 0x63, 0xf7 } };
 
 static const IID IID_IComponent =
@@ -67,7 +67,7 @@ interface IData;
 interface IDataArray;
 
 interface ICompAdapter;
-interface ICompCollection;
+interface ICompAdapterCollection;
 
 interface IComponent;
 interface IIOComponent;
@@ -134,13 +134,13 @@ static U8CSTR ko_KR = (U8CSTR)"ko-KR";
 // コンポーネントの種類
 enum class COMPTYPE : uint32_t
 {
-    UNKNOWN  = UINT32_MAX, // 不明なタイプ
-    BASIC   = 0,           // 基本コンポーネント
-    HOST    = 1,           // コンポーネントホスト
-    UI      = 1 << 1,      // UI コンポーネント
-    COMMAND = 1 << 2,      // コマンドコンポーネント
-    READER  = 1 << 3,      // 入力コンポーネント
-    WRITER  = 1 << 4,      // 出力コンポーネント
+    UNKNOWN   = UINT32_MAX, // 不明なタイプ
+    BASIC     = 0,          // 基本コンポーネント
+    HOST      = 1,          // コンポーネントホスト
+    UI        = 1 << 1,     // UI コンポーネント
+    COMMAND   = 1 << 2,     // コマンドコンポーネント
+    READER    = 1 << 3,     // 入力コンポーネント
+    WRITER    = 1 << 4,     // 出力コンポーネント
 };
 
 //---------------------------------------------------------------------------//
@@ -148,20 +148,19 @@ enum class COMPTYPE : uint32_t
 // コンポーネントの状態
 enum class STATE : uint32_t
 {
-    UNKNOWN  = UINT32_MAX, // 未初期化
-    IDLE     = 0,          // 停止中
-    ACTIVE   = 1,          // 実行中
-    OPEN     = 1 <<  1,    // 所有オブジェクトは開かれている
-
-    BUSY     = 1 <<  8,    // 処理中
-
-    STARTING = 1 <<  8,    // 開始処理中
-    STOPPING = 1 <<  9,    // 終了処理中
-    CLOSING  = 1 << 10,    // 所有オブジェクトを閉じようとしている
-    OPENING  = 1 << 11,    // 所有オブジェクトを開こうとしている
-    SEEKING  = 1 << 12,    // 所有オブジェクトを走査中
-    READING  = 1 << 13,    // 所有オブジェクトからデータを読込中
-    WRITING  = 1 << 14,    // 所有オブジェクトにデータを書込中
+    UNKNOWN   = UINT32_MAX, // 未初期化
+    IDLE      = 0,          // 停止中
+    ACTIVE    = 1,          // 実行中
+    OPEN      = 1 <<  1,    // 所有オブジェクトは開かれている
+    BUSY      = 1 << 16,    // （何らかの）処理中
+    MESSAGING = 1 << 16,    // メッセージ処理中
+    STARTING  = 1 << 17,    // 開始処理中
+    STOPPING  = 1 << 18,    // 終了処理中
+    CLOSING   = 1 << 19,    // 所有オブジェクトを閉じようとしている
+    OPENING   = 1 << 20,    // 所有オブジェクトを開こうとしている
+    SEEKING   = 1 << 21,    // 所有オブジェクトを走査中
+    READING   = 1 << 22,    // 所有オブジェクトからデータを読込中
+    WRITING   = 1 << 23,    // 所有オブジェクトにデータを書込中
 };
 
 // 暗黙の変換がなされないので以下の演算子オーバーロードが必要
@@ -249,9 +248,9 @@ interface IData : public IUnknown
 // 汎用データ格納オブジェクト集合のインターフェイス
 interface IDataArray : public IUnknown
 {
-    virtual IData* __stdcall at(size_t index = 0) const = 0;
-    virtual U8CSTR __stdcall name()               const = 0;
-    virtual size_t __stdcall size()               const = 0;
+    virtual IData* __stdcall at(size_t index) const = 0;
+    virtual U8CSTR __stdcall name()           const = 0;
+    virtual size_t __stdcall size()           const = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -260,13 +259,13 @@ interface IDataArray : public IUnknown
 interface ICompAdapter : public IUnknown
 {
     virtual VerInfo     __stdcall apiver()      const = 0;
-    virtual REFCLSID    __stdcall clsid()       const = 0;
     virtual U8CSTR      __stdcall copyright()   const = 0;
     virtual U8CSTR      __stdcall description() const = 0;
-    virtual U8CSTR      __stdcall path()        const = 0;
     virtual size_t      __stdcall index()       const = 0;
-    virtual IDataArray* __stdcall property()    const = 0;
     virtual U8CSTR      __stdcall name()        const = 0;
+    virtual U8CSTR      __stdcall path()        const = 0;
+    virtual IDataArray* __stdcall property()    const = 0;
+    virtual REFCLSID    __stdcall rclsid()      const = 0;
     virtual COMPTYPE    __stdcall type()        const = 0;
     virtual VerInfo     __stdcall version()     const = 0;
 
@@ -278,18 +277,18 @@ interface ICompAdapter : public IUnknown
 
 //---------------------------------------------------------------------------//
 
-typedef bool (__stdcall* CollectIf)(const ICompAdapter* adapter);
-
 // コンポーネント管理オブジェクトのインターフェイス
-interface ICompCollection : public IUnknown
+interface ICompAdapterCollection : public IUnknown
 {
+    typedef bool (__stdcall* Condition)(ICompAdapter* adapter);
+
     virtual size_t        __stdcall size()           const = 0;
     virtual ICompAdapter* __stdcall at(size_t index) const = 0;
 
-    virtual HRESULT          __stdcall Append(U8CSTR path) = 0;
-    virtual HRESULT          __stdcall Remove(U8CSTR path) = 0;
-    virtual ICompCollection* __stdcall Collect(CollectIf condition) = 0;
-    virtual ICompAdapter*    __stdcall Find(REFCLSID rclsid) = 0;
+    virtual HRESULT                 __stdcall Append(U8CSTR path) = 0;
+    virtual HRESULT                 __stdcall Remove(U8CSTR path) = 0;
+    virtual ICompAdapterCollection* __stdcall Collect(Condition condition) = 0;
+    virtual ICompAdapter*           __stdcall Find(REFCLSID rclsid) = 0;
 };
 
 //---------------------------------------------------------------------------//
@@ -297,12 +296,13 @@ interface ICompCollection : public IUnknown
 // コンポーネントの基本インターフェイス
 interface IComponent : public IUnknown
 {
-    virtual REFCLSID         __stdcall clsid()      const = 0;
-    virtual ICompCollection* __stdcall collection() const = 0;
-    virtual U8CSTR           __stdcall name()       const = 0;
-    virtual IComponent*      __stdcall owner()      const = 0;
-    virtual IDataArray*      __stdcall property()   const = 0;
-    virtual STATE            __stdcall status()     const = 0;
+    virtual ICompAdapterCollection* __stdcall adapters() const = 0;
+    virtual U8CSTR                  __stdcall name()     const = 0;
+    virtual IComponent*             __stdcall owner()    const = 0;
+    virtual IDataArray*             __stdcall property() const = 0;
+    virtual REFCLSID                __stdcall rclsid()   const = 0;
+    virtual IComponent*             __stdcall root()     const = 0;
+    virtual STATE                   __stdcall status()   const = 0;
 
     virtual HRESULT __stdcall AttachMessage(U8CSTR msg, IComponent* listener) = 0;
     virtual HRESULT __stdcall DetachMessage(U8CSTR msg, IComponent* listener) = 0;
