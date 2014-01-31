@@ -388,10 +388,7 @@ protected:
             return E_FAIL;
         }
 
-        // 別スレッドで解放されてしまわないよう
-        // 予め参照カウントを増やしておく
         const auto sender = this;
-        sender->AddRef();
 
         // 別スレッドで解放されてしまわないよう
         // 予め参照カウントを増やしておく
@@ -499,7 +496,6 @@ private:
 
             // データの解放
             if ( data ) { data->Release(); }
-            sender->Release();
         }
     }
 
@@ -552,7 +548,6 @@ private:
 
             // データの解放
             if ( data ) { data->Release(); }
-            sender->Release();
         }
 
         console_out(TEXT("Discarding notify data end"));
